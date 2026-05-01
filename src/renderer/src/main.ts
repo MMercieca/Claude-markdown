@@ -97,6 +97,10 @@ const markdownHighlight = HighlightStyle.define([
 
 const editableCompartment = new Compartment()
 
+// Tracks whether the agent is currently generating. Read by both the Escape
+// keymap and the onDone handler; written by the Mod-Enter keymap and onDone.
+let agentActive = false
+
 function setEditorEditable(editable: boolean): void {
   editor.dispatch({ effects: editableCompartment.reconfigure(EditorView.editable.of(editable)) })
 }
@@ -111,6 +115,7 @@ const editor = new EditorView({
           if (!text) return true
           view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: '' } })
           view.dispatch({ effects: editableCompartment.reconfigure(EditorView.editable.of(false)) })
+          agentActive = true
           void window.api.session.send(text)
           return true
         },
@@ -141,6 +146,18 @@ window.api.session.onDelta((delta) => {
 
 window.api.session.onDone(() => {
   responseContent.textContent += '\n'
+  agentActive = false
   setEditorEditable(true)
   editor.focus()
+})
+
+// Escape is handled at the document level because the editor is non-editable
+// while the agent is active and won't dispatch keymaps in that state.
+document.addEventListener('keydown', (e: KeyboardEvent) => {
+  if (e.key === 'Escape' && agentActive) {
+    e.preventDefault()
+    responseContent.textContent += '[interrupted]\n'
+    agentActive = false
+    void window.api.session.interrupt()
+  }
 })

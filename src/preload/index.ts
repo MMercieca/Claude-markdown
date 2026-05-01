@@ -19,6 +19,9 @@ const api = {
     send: (text: string): Promise<void> =>
       ipcRenderer.invoke('session:send', text) as Promise<void>,
 
+    interrupt: (): Promise<void> =>
+      ipcRenderer.invoke('session:interrupt') as Promise<void>,
+
     onDelta: (cb: (delta: string) => void): (() => void) => {
       const listener = (_e: Electron.IpcRendererEvent, delta: string) => cb(delta)
       ipcRenderer.on('session:delta', listener)

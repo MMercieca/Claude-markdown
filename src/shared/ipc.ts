@@ -19,6 +19,7 @@ export interface RendererToMain {
   'layout:load'(): LayoutState | null
   'layout:save'(state: LayoutState): void
   'session:send'(text: string): void
+  'session:interrupt'(): void
 }
 
 export interface MainToRenderer {

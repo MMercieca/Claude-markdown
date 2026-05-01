@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { homedir } from 'node:os'
 import { query } from '@anthropic-ai/claude-agent-sdk'
-import type { SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
+import type { SDKUserMessage, Query } from '@anthropic-ai/claude-agent-sdk'
 import type { LayoutState } from '../shared/ipc'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -50,8 +50,9 @@ class PromptChannel implements AsyncIterable<SDKUserMessage> {
 
 interface SessionState {
   windowId: number
-  activeQuery: boolean          // true while the agent is generating a response
+  activeQuery: boolean              // true while the agent is generating a response
   promptChannel: PromptChannel | null  // null until first send
+  activeQueryObj: Query | null      // live Query for interrupt; null when idle
   // settings (cwd, model, effort) added in step 18
 }
 
@@ -66,8 +67,9 @@ async function runQueryLoop(
   win: BrowserWindow,
   channel: PromptChannel,
 ): Promise<void> {
+  const q = query({ prompt: channel, options: { includePartialMessages: true } })
+  session.activeQueryObj = q
   try {
-    const q = query({ prompt: channel, options: { includePartialMessages: true } })
     for await (const msg of q) {
       if (win.isDestroyed()) break
 
@@ -80,19 +82,40 @@ async function runQueryLoop(
           win.webContents.send('session:delta', streamEvent.delta.text)
         }
       } else if (msg.type === 'assistant' && msg.parent_tool_use_id === null) {
-        // Top-level assistant turn complete — renderer may send the next prompt
-        session.activeQuery = false
-        win.webContents.send('session:done')
+        // Guard against race with interrupt handler — only send once.
+        if (session.activeQuery) {
+          session.activeQuery = false
+          win.webContents.send('session:done')
+        }
       }
     }
   } catch (err) {
     console.error('[session] Query loop error:', err)
-    if (!win.isDestroyed()) {
+    if (!win.isDestroyed() && session.activeQuery) {
       session.activeQuery = false
       win.webContents.send('session:done')
     }
+  } finally {
+    session.activeQueryObj = null
   }
 }
+
+// ── Session interrupt handler ───────────────────────────────────────────────
+
+ipcMain.handle('session:interrupt', async (event): Promise<void> => {
+  const session = sessions.get(event.sender.id)
+  if (!session?.activeQuery || !session.activeQueryObj) return
+
+  await session.activeQueryObj.interrupt()
+
+  // If the loop's assistant-message handler hasn't already sent session:done,
+  // send it now so the renderer can re-enable input.
+  if (session.activeQuery) {
+    session.activeQuery = false
+    const win = BrowserWindow.fromWebContents(event.sender)
+    win?.webContents.send('session:done')
+  }
+})
 
 // ── Session send handler ────────────────────────────────────────────────────
 
@@ -155,7 +178,7 @@ function createWindow(): void {
   })
 
   const sessionId = win.webContents.id
-  sessions.set(sessionId, { windowId: sessionId, activeQuery: false, promptChannel: null })
+  sessions.set(sessionId, { windowId: sessionId, activeQuery: false, promptChannel: null, activeQueryObj: null })
 
   win.on('closed', () => {
     sessions.get(sessionId)?.promptChannel?.close()
