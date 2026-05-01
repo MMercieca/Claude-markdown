@@ -1,9 +1,18 @@
-import { contextBridge } from 'electron'
+import { contextBridge, ipcRenderer } from 'electron'
 
-// Typed stub — channels are wired in step 7 (typed IPC contract).
-// Exposing the key now locks down the surface: renderer can only reach main
-// through window.api, never through require or node globals.
-const api = {} as const
+export interface LayoutState {
+  leftWidth: number
+  promptHeight: number
+}
+
+const api = {
+  layout: {
+    load: (): Promise<LayoutState | null> =>
+      ipcRenderer.invoke('layout:load') as Promise<LayoutState | null>,
+    save: (state: LayoutState): Promise<void> =>
+      ipcRenderer.invoke('layout:save', state) as Promise<void>,
+  },
+} as const
 
 contextBridge.exposeInMainWorld('api', api)
 

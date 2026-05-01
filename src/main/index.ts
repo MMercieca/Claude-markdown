@@ -1,8 +1,29 @@
-import { app, BrowserWindow, nativeTheme } from 'electron'
+import { app, BrowserWindow, ipcMain, nativeTheme } from 'electron'
+import { readFile, writeFile, mkdir } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
+import { homedir } from 'node:os'
+import type { LayoutState } from '../preload/index'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
+
+const layoutDir = join(homedir(), '.claude-markdown')
+const layoutPath = join(layoutDir, 'layout.json')
+
+ipcMain.handle('layout:load', async (): Promise<LayoutState | null> => {
+  try {
+    const raw = await readFile(layoutPath, 'utf-8')
+    const parsed: unknown = JSON.parse(raw)
+    return parsed as LayoutState
+  } catch {
+    return null
+  }
+})
+
+ipcMain.handle('layout:save', async (_event, state: LayoutState): Promise<void> => {
+  await mkdir(layoutDir, { recursive: true })
+  await writeFile(layoutPath, JSON.stringify(state), 'utf-8')
+})
 
 function createWindow(): void {
   const window = new BrowserWindow({
