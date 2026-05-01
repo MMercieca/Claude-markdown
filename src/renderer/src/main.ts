@@ -2,6 +2,8 @@ import { EditorView, keymap } from '@codemirror/view'
 import { EditorState, Compartment, Prec } from '@codemirror/state'
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
 import { markdown } from '@codemirror/lang-markdown'
+import { syntaxHighlighting, HighlightStyle } from '@codemirror/language'
+import { tags } from '@lezer/highlight'
 
 const leftCol = document.getElementById('left-col') as HTMLElement
 const responsePane = document.getElementById('response-pane') as HTMLElement
@@ -80,6 +82,19 @@ document.addEventListener('mouseup', () => {
 
 // ── CodeMirror editor ───────────────────────────────────────────────────────
 
+// Markdown source-with-decorations: content styled, delimiters dimmed.
+// Tags come from @lezer/markdown's style assignments; see its dist/index.js.
+const markdownHighlight = HighlightStyle.define([
+  { tag: tags.heading1,              fontSize: '1.4em', fontWeight: 'bold' },
+  { tag: tags.heading2,              fontSize: '1.2em', fontWeight: 'bold' },
+  { tag: tags.heading3,              fontSize: '1.1em', fontWeight: 'bold' },
+  { tag: tags.strong,                fontWeight: 'bold' },
+  { tag: tags.emphasis,              fontStyle: 'italic' },
+  { tag: tags.monospace,             fontFamily: 'monospace', fontSize: '0.9em' },
+  // HeaderMark, EmphasisMark, CodeMark, etc. all get processingInstruction
+  { tag: tags.processingInstruction, opacity: '0.4' },
+])
+
 const editableCompartment = new Compartment()
 
 function setEditorEditable(editable: boolean): void {
@@ -103,6 +118,7 @@ const editor = new EditorView({
       history(),
       keymap.of([...defaultKeymap, ...historyKeymap]),
       markdown(),
+      syntaxHighlighting(markdownHighlight),
       editableCompartment.of(EditorView.editable.of(true)),
       EditorView.theme({
         '&': { background: 'transparent', color: 'inherit', height: '100%' },

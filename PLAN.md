@@ -28,12 +28,12 @@ After every commit the app should run and the new behavior should be exercisable
 ## Phase 4 — Prompt editor
 
 - [x] **11. CodeMirror 6 + `@codemirror/lang-markdown` in the prompt pane.** Plain editor, no decorations yet.
-- [ ] **12. Inline source-with-decorations.** Bold/italic/code render styled with delimiters dimmed; headings sized; fenced blocks monospace + highlighted.
+- [x] **12. Inline source-with-decorations.** Bold/italic/code render styled with delimiters dimmed; headings sized; fenced blocks monospace + highlighted.
 - [ ] **13. Send keybindings.** `Cmd+Enter` sends + clears; `Enter` newline; `Esc` calls `query.interrupt()` (only enabled while agent active). Truncated turn marked `[interrupted]`.
 
 ## Phase 5 — Markdown transcript
 
-- [ ] **14. `react-markdown` + `remark-gfm` + `rehype-highlight` in response pane.** Render completed turns as Markdown; same highlight theme as the editor.
+- [ ] **14. `react-markdown` + `remark-gfm` + `rehype-highlight` in response pane.** Render completed turns as Markdown; pick a highlight theme and apply it to both the response pane (via rehype-highlight CSS) and the prompt editor (via a matching CodeMirror `HighlightStyle` color layer on top of step 12's typographic decorations).
 - [ ] **15. Streaming Markdown rendering.** Re-render on every delta. Inline styles snap when delimiters close.
 - [ ] **16. Fenced-code mid-stream special case.** Detect open ` ``` ` in buffer; render unclosed fence as code immediately.
 - [ ] **17. Code block copy button.** Top-right of every rendered block; one click → clipboard.
