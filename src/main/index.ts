@@ -3,6 +3,7 @@ import { readFile, writeFile, mkdir } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { homedir } from 'node:os'
+import { query } from '@anthropic-ai/claude-agent-sdk'
 import type { LayoutState } from '../shared/ipc'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -80,10 +81,32 @@ function createWindow(): void {
   }
 }
 
+// ── SDK smoke test (step 8) ─────────────────────────────────────────────────
+// One-shot hardcoded query to verify SDK auth and basic flow.
+// Removed in step 9 when the real streaming UI is wired.
+
+async function runSmokeTest(): Promise<void> {
+  console.log('[smoke] Starting SDK smoke test…')
+  try {
+    const q = query({ prompt: 'Reply with exactly: smoke test OK' })
+    for await (const msg of q) {
+      if (msg.type === 'result' && msg.subtype === 'success') {
+        console.log('[smoke] Result:', msg.result)
+        console.log('[smoke] Cost: $' + msg.total_cost_usd.toFixed(4))
+      } else if (msg.type === 'result') {
+        console.error('[smoke] Error result:', msg)
+      }
+    }
+  } catch (err) {
+    console.error('[smoke] SDK error:', err)
+  }
+}
+
 // ── App lifecycle ───────────────────────────────────────────────────────────
 
 void app.whenReady().then(() => {
   createWindow()
+  void runSmokeTest()
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
