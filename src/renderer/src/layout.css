@@ -1,0 +1,106 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 13px;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+/* ── Top-level flex row: left-col | col-divider | right-col ── */
+
+#app {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+}
+
+#left-col {
+  flex: 65;
+  min-width: 200px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+#col-divider {
+  flex: none;
+  width: 4px;
+  cursor: col-resize;
+  background: var(--divider);
+  transition: background 80ms;
+}
+
+#col-divider:hover { background: var(--divider-active); }
+
+#right-col {
+  flex: 35;
+  min-width: 150px;
+  overflow: hidden;
+  border-left: none; /* col-divider is the visual separator */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ── Left column: status-bar | response-pane | row-divider | prompt-pane ── */
+
+#status-bar {
+  flex: none;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--divider);
+}
+
+#response-pane {
+  flex: 60;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#row-divider {
+  flex: none;
+  height: 4px;
+  cursor: row-resize;
+  background: var(--divider);
+  transition: background 80ms;
+}
+
+#row-divider:hover { background: var(--divider-active); }
+
+#prompt-pane {
+  flex: 40;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ── Placeholder labels ── */
+
+.pane-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.25;
+  user-select: none;
+  pointer-events: none;
+}
+
+/* ── Color tokens (overridden in step 4 by nativeTheme) ── */
+
+:root {
+  --bg: #ffffff;
+  --fg: #1a1a1a;
+  --divider: #e0e0e0;
+  --divider-active: #0066cc;
+}

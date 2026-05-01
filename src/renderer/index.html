@@ -8,9 +8,19 @@
       content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ws://localhost:* http://localhost:*"
     />
     <title>Claude Markdown</title>
+    <link rel="stylesheet" href="./src/layout.css" />
   </head>
   <body>
-    <div id="root"></div>
+    <div id="app">
+      <div id="left-col">
+        <div id="status-bar"><span class="pane-label">Status Bar</span></div>
+        <div id="response-pane"><span class="pane-label">Response</span></div>
+        <div id="row-divider"></div>
+        <div id="prompt-pane"><span class="pane-label">Prompt</span></div>
+      </div>
+      <div id="col-divider"></div>
+      <div id="right-col"><span class="pane-label">Status</span></div>
+    </div>
     <script type="module" src="./src/main.ts"></script>
   </body>
 </html>

@@ -10,7 +10,7 @@ After every commit the app should run and the new behavior should be exercisable
 
 - [x] **1. Scaffold Electron + TypeScript + Vite (electron-vite).** Main, preload, renderer entry points; `pnpm dev` opens a blank window. Strict TS, ESLint.
 - [x] **2. Lock down renderer security.** `contextIsolation: true`, `nodeIntegration: false`, sandboxed preload exposing a typed `window.api` stub via `contextBridge`. Verify devtools shows no `require`.
-- [ ] **3. Three-pane layout shell.** Empty `Response` (top-left), `Prompt` (bottom-left), `Status` (right). Draggable dividers. CSS only — no logic.
+- [x] **3. Three-pane layout shell.** Empty `Response` (top-left), `Prompt` (bottom-left), `Status` (right). Draggable dividers. CSS only — no logic.
 - [ ] **4. macOS theme follow.** Subscribe to `nativeTheme`; CSS variables flip on system light/dark. No picker.
 - [ ] **5. Layout persistence.** Save/restore divider positions to `~/.claude-markdown/layout.json`. Debounced writes.
 
