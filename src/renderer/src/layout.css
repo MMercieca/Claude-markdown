@@ -96,11 +96,20 @@ html, body {
   pointer-events: none;
 }
 
-/* ── Color tokens (overridden in step 4 by nativeTheme) ── */
+/* ── Color tokens — follow macOS system appearance via prefers-color-scheme ── */
 
 :root {
   --bg: #ffffff;
   --fg: #1a1a1a;
   --divider: #e0e0e0;
   --divider-active: #0066cc;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1e1e1e;
+    --fg: #d4d4d4;
+    --divider: #3a3a3a;
+    --divider-active: #4d9fff;
+  }
 }
