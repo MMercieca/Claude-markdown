@@ -86,20 +86,29 @@ html, body {
   display: flex;
 }
 
-#prompt-input {
+/* ── CodeMirror editor in prompt pane ── */
+
+#prompt-editor {
   flex: 1;
-  resize: none;
-  border: none;
-  outline: none;
-  background: var(--bg);
-  color: var(--fg);
-  font-family: inherit;
-  font-size: inherit;
-  padding: 12px;
-  line-height: 1.5;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
-#prompt-input::placeholder { opacity: 0.4; }
+#prompt-editor .cm-editor {
+  flex: 1;
+  height: 100%;
+}
+
+#prompt-editor .cm-scroller {
+  overflow: auto;
+  padding: 12px;
+  line-height: 1.5;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 13px;
+}
+
+#prompt-editor .cm-focused { outline: none; }
 
 /* ── Placeholder labels ── */
 

@@ -1,8 +1,13 @@
+import { EditorView, keymap } from '@codemirror/view'
+import { EditorState, Compartment, Prec } from '@codemirror/state'
+import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
+import { markdown } from '@codemirror/lang-markdown'
+
 const leftCol = document.getElementById('left-col') as HTMLElement
 const responsePane = document.getElementById('response-pane') as HTMLElement
 const responseContent = document.getElementById('response-content') as HTMLElement
 const promptPane = document.getElementById('prompt-pane') as HTMLElement
-const promptInput = document.getElementById('prompt-input') as HTMLTextAreaElement
+const promptEditorEl = document.getElementById('prompt-editor') as HTMLElement
 const colDivider = document.getElementById('col-divider') as HTMLElement
 const rowDivider = document.getElementById('row-divider') as HTMLElement
 
@@ -73,6 +78,44 @@ document.addEventListener('mouseup', () => {
   active = null
 })
 
+// ── CodeMirror editor ───────────────────────────────────────────────────────
+
+const editableCompartment = new Compartment()
+
+function setEditorEditable(editable: boolean): void {
+  editor.dispatch({ effects: editableCompartment.reconfigure(EditorView.editable.of(editable)) })
+}
+
+const editor = new EditorView({
+  state: EditorState.create({
+    extensions: [
+      Prec.highest(keymap.of([{
+        key: 'Mod-Enter',
+        run: (view): boolean => {
+          const text = view.state.doc.toString().trim()
+          if (!text) return true
+          view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: '' } })
+          view.dispatch({ effects: editableCompartment.reconfigure(EditorView.editable.of(false)) })
+          void window.api.session.send(text)
+          return true
+        },
+      }])),
+      history(),
+      keymap.of([...defaultKeymap, ...historyKeymap]),
+      markdown(),
+      editableCompartment.of(EditorView.editable.of(true)),
+      EditorView.theme({
+        '&': { background: 'transparent', color: 'inherit', height: '100%' },
+        '.cm-content': { caretColor: 'currentColor' },
+        '.cm-cursor': { borderLeftColor: 'currentColor' },
+        '.cm-selectionBackground': { background: 'Highlight' },
+        '&.cm-focused .cm-selectionBackground': { background: 'Highlight' },
+      }),
+    ],
+  }),
+  parent: promptEditorEl,
+})
+
 // ── Session streaming ───────────────────────────────────────────────────────
 
 window.api.session.onDelta((delta) => {
@@ -82,17 +125,6 @@ window.api.session.onDelta((delta) => {
 
 window.api.session.onDone(() => {
   responseContent.textContent += '\n'
-  promptInput.disabled = false
-  promptInput.focus()
-})
-
-promptInput.addEventListener('keydown', (e: KeyboardEvent) => {
-  if (e.key === 'Enter' && e.metaKey) {
-    e.preventDefault()
-    const text = promptInput.value.trim()
-    if (!text) return
-    promptInput.value = ''
-    promptInput.disabled = true
-    void window.api.session.send(text)
-  }
+  setEditorEditable(true)
+  editor.focus()
 })
