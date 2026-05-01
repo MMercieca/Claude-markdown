@@ -19,6 +19,8 @@ export default defineConfig({
         input: {
           index: resolve(__dirname, 'src/preload/index.ts'),
         },
+        // Sandboxed preload context is CJS-only — ES module imports fail at runtime.
+        output: { format: 'cjs', entryFileNames: '[name].js' },
       },
     },
   },
