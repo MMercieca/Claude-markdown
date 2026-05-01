@@ -1,6 +1,8 @@
 const leftCol = document.getElementById('left-col') as HTMLElement
 const responsePane = document.getElementById('response-pane') as HTMLElement
+const responseContent = document.getElementById('response-content') as HTMLElement
 const promptPane = document.getElementById('prompt-pane') as HTMLElement
+const promptInput = document.getElementById('prompt-input') as HTMLTextAreaElement
 const colDivider = document.getElementById('col-divider') as HTMLElement
 const rowDivider = document.getElementById('row-divider') as HTMLElement
 
@@ -69,4 +71,27 @@ document.addEventListener('mousemove', (e: MouseEvent) => {
 document.addEventListener('mouseup', () => {
   if (active !== null) scheduleSave()
   active = null
+})
+
+// ── Session streaming ───────────────────────────────────────────────────────
+
+window.api.session.onDelta((delta) => {
+  responseContent.textContent = (responseContent.textContent ?? '') + delta
+  responsePane.scrollTop = responsePane.scrollHeight
+})
+
+window.api.session.onDone(() => {
+  promptInput.disabled = false
+  promptInput.focus()
+})
+
+promptInput.addEventListener('keydown', (e: KeyboardEvent) => {
+  if (e.key === 'Enter' && e.metaKey) {
+    e.preventDefault()
+    const text = promptInput.value.trim()
+    if (!text) return
+    promptInput.value = ''
+    promptInput.disabled = true
+    void window.api.session.send(text)
+  }
 })

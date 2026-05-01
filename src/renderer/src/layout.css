@@ -60,9 +60,13 @@ html, body {
   flex: 60;
   min-height: 0;
   overflow: auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  padding: 12px;
+}
+
+#response-content {
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.5;
 }
 
 #row-divider {
@@ -78,11 +82,24 @@ html, body {
 #prompt-pane {
   flex: 40;
   min-height: 0;
-  overflow: auto;
+  overflow: hidden;
   display: flex;
-  align-items: center;
-  justify-content: center;
 }
+
+#prompt-input {
+  flex: 1;
+  resize: none;
+  border: none;
+  outline: none;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: inherit;
+  font-size: inherit;
+  padding: 12px;
+  line-height: 1.5;
+}
+
+#prompt-input::placeholder { opacity: 0.4; }
 
 /* ── Placeholder labels ── */
 

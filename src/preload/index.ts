@@ -14,6 +14,23 @@ const api = {
     save: (state: LayoutState): Promise<void> =>
       ipcRenderer.invoke('layout:save', state) as Promise<void>,
   },
+
+  session: {
+    send: (text: string): Promise<void> =>
+      ipcRenderer.invoke('session:send', text) as Promise<void>,
+
+    onDelta: (cb: (delta: string) => void): (() => void) => {
+      const listener = (_e: Electron.IpcRendererEvent, delta: string) => cb(delta)
+      ipcRenderer.on('session:delta', listener)
+      return () => ipcRenderer.removeListener('session:delta', listener)
+    },
+
+    onDone: (cb: () => void): (() => void) => {
+      const listener = () => cb()
+      ipcRenderer.on('session:done', listener)
+      return () => ipcRenderer.removeListener('session:done', listener)
+    },
+  },
 } as const
 
 contextBridge.exposeInMainWorld('api', api)

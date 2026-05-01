@@ -22,7 +22,7 @@ After every commit the app should run and the new behavior should be exercisable
 ## Phase 3 — First SDK exchange
 
 - [x] **8. Add `@anthropic-ai/claude-agent-sdk`; one-shot non-streaming query.** Hardcoded prompt, log result to console. Pure smoke test of SDK + auth in main.
-- [ ] **9. Streaming-input mode wired to UI.** `query()` with async-generator prompt; renderer sends a string, main pushes deltas back over IPC; response pane appends raw text. Single turn only, no markdown yet.
+- [x] **9. Streaming-input mode wired to UI.** `query()` with async-generator prompt; renderer sends a string, main pushes deltas back over IPC; response pane appends raw text. Single turn only, no markdown yet.
 - [ ] **10. Persistent multi-turn.** Generator stays open; second prompt continues the same session. Verify via "remember the number 7" → "what number?" round-trip.
 
 ## Phase 4 — Prompt editor
@@ -41,6 +41,7 @@ After every commit the app should run and the new behavior should be exercisable
 ## Phase 6 — Status bar
 
 - [ ] **18. Status bar config mode.** Show `cwd | model | effort` with `[change]` affordances. `cwd` → native folder picker; `model` / `effort` → dropdowns. Defaults from `$PWD`/`$HOME` and `~/.claude/settings.json`.
+- [ ] **18a. Claude-style activity spinner in response pane.** While a query is active, show an animated spinner (matching Claude's dot/ellipsis pulse style) at the bottom of the response pane. Spinner disappears on `session:done`. Covers the gap between send and first token.
 - [ ] **19. Transition to monitoring mode on first send.** Pickers freeze read-only. Add `Ctx N% • 5h N% • 7d N%` from `SDKResultMessage`; threshold colors (green/amber/red).
 - [ ] **20. Cost estimate field.** Hardcoded per-model price table → `~$X.XX`. Hidden under Pro/Max subscription auth (detect via SDK auth mode).
 

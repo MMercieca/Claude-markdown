@@ -14,12 +14,41 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 
 interface SessionState {
   windowId: number
-  // sdk query added in step 8
-  // transcript added in step 9 / 14
+  activeQuery: boolean
   // settings (cwd, model, effort) added in step 18
 }
 
 const sessions = new Map<number, SessionState>()
+
+// ── Session send handler ────────────────────────────────────────────────────
+
+ipcMain.handle('session:send', async (event, text: string): Promise<void> => {
+  const winId = event.sender.id
+  const session = sessions.get(winId)
+  if (!session || session.activeQuery) return
+
+  const win = BrowserWindow.fromWebContents(event.sender)
+  if (!win) return
+
+  session.activeQuery = true
+  try {
+    const q = query({ prompt: text, options: { includePartialMessages: true } })
+    for await (const msg of q) {
+      if (msg.type === 'stream_event') {
+        const { event: streamEvent } = msg
+        if (
+          streamEvent.type === 'content_block_delta' &&
+          streamEvent.delta.type === 'text_delta'
+        ) {
+          win.webContents.send('session:delta', streamEvent.delta.text)
+        }
+      }
+    }
+  } finally {
+    session.activeQuery = false
+    win.webContents.send('session:done')
+  }
+})
 
 // ── IPC handlers ────────────────────────────────────────────────────────────
 // Channel names must match RendererToMain keys in src/shared/ipc.ts.
@@ -64,7 +93,7 @@ function createWindow(): void {
   })
 
   const sessionId = win.webContents.id
-  sessions.set(sessionId, { windowId: sessionId })
+  sessions.set(sessionId, { windowId: sessionId, activeQuery: false })
 
   win.on('closed', () => {
     sessions.delete(sessionId)
@@ -81,32 +110,10 @@ function createWindow(): void {
   }
 }
 
-// ── SDK smoke test (step 8) ─────────────────────────────────────────────────
-// One-shot hardcoded query to verify SDK auth and basic flow.
-// Removed in step 9 when the real streaming UI is wired.
-
-async function runSmokeTest(): Promise<void> {
-  console.log('[smoke] Starting SDK smoke test…')
-  try {
-    const q = query({ prompt: 'Reply with exactly: smoke test OK' })
-    for await (const msg of q) {
-      if (msg.type === 'result' && msg.subtype === 'success') {
-        console.log('[smoke] Result:', msg.result)
-        console.log('[smoke] Cost: $' + msg.total_cost_usd.toFixed(4))
-      } else if (msg.type === 'result') {
-        console.error('[smoke] Error result:', msg)
-      }
-    }
-  } catch (err) {
-    console.error('[smoke] SDK error:', err)
-  }
-}
-
 // ── App lifecycle ───────────────────────────────────────────────────────────
 
 void app.whenReady().then(() => {
   createWindow()
-  void runSmokeTest()
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

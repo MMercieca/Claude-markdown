@@ -5,9 +5,8 @@
  *   ipcMain.handle). Values are the synchronous return type; the preload
  *   wraps each in a Promise.
  *
- * MainToRenderer: channels main pushes to the renderer (ipcMain.send /
- *   ipcRenderer.on). Populated in later steps when streaming and permission
- *   events are added.
+ * MainToRenderer: channels main sends to the renderer (webContents.send /
+ *   ipcRenderer.on). Values are the event payload type.
  */
 
 export interface LayoutState {
@@ -19,7 +18,10 @@ export interface RendererToMain {
   ping(): 'pong'
   'layout:load'(): LayoutState | null
   'layout:save'(state: LayoutState): void
+  'session:send'(text: string): void
 }
 
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type
-export interface MainToRenderer {}
+export interface MainToRenderer {
+  'session:delta': string  // partial text delta while streaming
+  'session:done': void     // query completed
+}
