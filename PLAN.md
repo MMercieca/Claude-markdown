@@ -16,7 +16,7 @@ After every commit the app should run and the new behavior should be exercisable
 
 ## Phase 2 — Window-keyed session plumbing
 
-- [ ] **6. Per-window `SessionState` map in main.** `Map<windowId, SessionState>` keyed by `event.sender.id`. Every IPC handler reads/writes through it. Even with one window today, this is the design's load-bearing decision — bake it in.
+- [x] **6. Per-window `SessionState` map in main.** `Map<windowId, SessionState>` keyed by `event.sender.id`. Every IPC handler reads/writes through it. Even with one window today, this is the design's load-bearing decision — bake it in.
 - [ ] **7. Typed IPC contract.** Define `RendererToMain` / `MainToRenderer` channel types in a shared module; preload exposes only those. Adds a hello-world `ping` round-trip to prove it works.
 
 ## Phase 3 — First SDK exchange
