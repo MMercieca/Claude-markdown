@@ -81,6 +81,7 @@ window.api.session.onDelta((delta) => {
 })
 
 window.api.session.onDone(() => {
+  responseContent.textContent += '\n'
   promptInput.disabled = false
   promptInput.focus()
 })
