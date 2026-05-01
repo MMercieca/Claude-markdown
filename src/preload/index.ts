@@ -1,11 +1,13 @@
 import { contextBridge, ipcRenderer } from 'electron'
+import type { LayoutState } from '../shared/ipc'
 
-export interface LayoutState {
-  leftWidth: number
-  promptHeight: number
-}
-
+// Ergonomic nested API exposed to the renderer. Each method wraps
+// ipcRenderer.invoke so the renderer never sees ipcRenderer directly.
+// Channel names match the RendererToMain keys in src/shared/ipc.ts.
 const api = {
+  ping: (): Promise<'pong'> =>
+    ipcRenderer.invoke('ping') as Promise<'pong'>,
+
   layout: {
     load: (): Promise<LayoutState | null> =>
       ipcRenderer.invoke('layout:load') as Promise<LayoutState | null>,
@@ -17,3 +19,4 @@ const api = {
 contextBridge.exposeInMainWorld('api', api)
 
 export type Api = typeof api
+export type { LayoutState }

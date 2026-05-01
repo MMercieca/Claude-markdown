@@ -3,7 +3,7 @@ import { readFile, writeFile, mkdir } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { homedir } from 'node:os'
-import type { LayoutState } from '../preload/index'
+import type { LayoutState } from '../shared/ipc'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -20,7 +20,12 @@ interface SessionState {
 
 const sessions = new Map<number, SessionState>()
 
-// ── Layout IPC (global, not per-window per the design) ──────────────────────
+// ── IPC handlers ────────────────────────────────────────────────────────────
+// Channel names must match RendererToMain keys in src/shared/ipc.ts.
+
+ipcMain.handle('ping', (): 'pong' => 'pong')
+
+// Layout channels are global (one shared layout file); not per-window.
 
 const layoutDir = join(homedir(), '.claude-markdown')
 const layoutPath = join(layoutDir, 'layout.json')
