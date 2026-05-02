@@ -143,6 +143,16 @@ html, body {
   .sb-usage-red   { color: #f85149; }
 }
 
+.sb-sign-in {
+  opacity: 0.7;
+  font-size: 11px;
+}
+
+.sb-sign-in:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
 .sb-dropdown {
   position: fixed;
   z-index: 100;

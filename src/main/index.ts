@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, nativeTheme, dialog } from 'electron'
+import { app, BrowserWindow, ipcMain, nativeTheme, dialog, shell } from 'electron'
 import { readFile, writeFile, mkdir } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
@@ -12,6 +12,7 @@ import type {
   ConfigBootstrap,
   UsageState,
   AuthInfo,
+  SignInStatus,
 } from '../shared/ipc'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -254,6 +255,56 @@ ipcMain.handle('session:interrupt', async (event): Promise<void> => {
     session.activeQuery = false
     const win = BrowserWindow.fromWebContents(event.sender)
     win?.webContents.send('session:done')
+  }
+})
+
+// ── Claude.ai OAuth sign-in handler ────────────────────────────────────────
+// Starts an ephemeral query just to run the claudeAuthenticate + wait flow,
+// then closes it. The resulting tokens are cached by the CLI for all future
+// queries in this session.
+
+// Runtime shape of the undocumented OAuth control methods on Query.
+interface QueryWithOAuth {
+  claudeAuthenticate(loginWithClaudeAi: boolean): Promise<{ url?: string }>
+  claudeOAuthWaitForCompletion(): Promise<void>
+}
+
+ipcMain.handle('session:signIn', async (event): Promise<void> => {
+  const session = sessions.get(event.sender.id)
+  if (!session) return
+  const win = BrowserWindow.fromWebContents(event.sender)
+  if (!win) return
+
+  const sendStatus = (status: SignInStatus): void => {
+    if (!win.isDestroyed()) win.webContents.send('session:signInStatus', status)
+  }
+
+  sendStatus({ inProgress: true })
+
+  const authChannel = new PromptChannel()
+  const q = query({
+    prompt: authChannel,
+    options: {
+      cwd: session.cwd,
+      model: session.model,
+      effort: session.effort,
+    },
+  })
+
+  try {
+    const oauthQ = q as unknown as QueryWithOAuth
+    const result = await oauthQ.claudeAuthenticate(true)
+    const url = result?.url
+    if (url) await shell.openExternal(url)
+
+    await oauthQ.claudeOAuthWaitForCompletion()
+    sendStatus({ inProgress: false })
+  } catch (err) {
+    const error = err instanceof Error ? err.message : String(err)
+    sendStatus({ inProgress: false, error })
+  } finally {
+    authChannel.close()
+    q.close()
   }
 })
 

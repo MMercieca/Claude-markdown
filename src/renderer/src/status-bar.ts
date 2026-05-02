@@ -1,4 +1,4 @@
-import type { ConfigBootstrap, EffortLevel, ModelOption, UsageState, AuthInfo, RateLimitStatus } from '../../shared/ipc'
+import type { ConfigBootstrap, EffortLevel, ModelOption, UsageState, AuthInfo, RateLimitStatus, SignInStatus } from '../../shared/ipc'
 
 export interface StatusBarHandle {
   /** Switch to monitoring mode: pickers freeze, usage chips appear. Idempotent. */
@@ -33,6 +33,7 @@ export async function mountStatusBar(container: HTMLElement): Promise<StatusBarH
   let frozen = false
   let usage: UsageState = {}
   let auth: AuthInfo | null = null
+  let signInStatus: SignInStatus = { inProgress: false }
 
   container.innerHTML = ''
   container.classList.add('status-bar-config')
@@ -42,11 +43,13 @@ export async function mountStatusBar(container: HTMLElement): Promise<StatusBarH
   const modelItem = document.createElement('button')
   const sep2     = document.createElement('span')
   const effortItem = document.createElement('button')
+  const sep3SignIn = document.createElement('span')
+  const signInItem = document.createElement('button')
   // Usage chip container — appended only after freeze().
   const usageWrap = document.createElement('span')
   usageWrap.className = 'sb-usage'
 
-  for (const sep of [sep1, sep2]) {
+  for (const sep of [sep1, sep2, sep3SignIn]) {
     sep.className = 'sb-sep'
     sep.textContent = '|'
   }
@@ -54,13 +57,30 @@ export async function mountStatusBar(container: HTMLElement): Promise<StatusBarH
   cwdItem.className = 'sb-item'
   modelItem.className = 'sb-item'
   effortItem.className = 'sb-item'
+  signInItem.className = 'sb-item sb-sign-in'
 
   function paint(): void {
     const changeAffordance = frozen ? '' : '<span class="sb-change">[change]</span>'
     cwdItem.innerHTML    = `<span class="sb-value">${escapeHtml(shortenCwd(current.cwd))}</span>${changeAffordance}`
     modelItem.innerHTML  = `<span class="sb-value">${escapeHtml(modelLabel(current.model, current.models))}</span>${changeAffordance}`
     effortItem.innerHTML = `<span class="sb-value">${escapeHtml(current.effort)}</span>${changeAffordance}`
+    if (!frozen) paintSignIn()
     if (frozen) paintUsage()
+  }
+
+  function paintSignIn(): void {
+    if (signInStatus.inProgress) {
+      signInItem.textContent = 'Signing in…'
+      signInItem.disabled = true
+    } else if (signInStatus.error) {
+      signInItem.textContent = 'Sign in failed'
+      signInItem.title = signInStatus.error
+      signInItem.disabled = false
+    } else {
+      signInItem.textContent = 'Sign in with Claude'
+      signInItem.title = ''
+      signInItem.disabled = false
+    }
   }
 
   function paintUsage(): void {
@@ -74,7 +94,7 @@ export async function mountStatusBar(container: HTMLElement): Promise<StatusBarH
   }
 
   paint()
-  container.append(cwdItem, sep1, modelItem, sep2, effortItem)
+  container.append(cwdItem, sep1, modelItem, sep2, effortItem, sep3SignIn, signInItem)
 
   cwdItem.addEventListener('click', async () => {
     if (frozen) return
@@ -104,6 +124,16 @@ export async function mountStatusBar(container: HTMLElement): Promise<StatusBarH
     })
   })
 
+  signInItem.addEventListener('click', () => {
+    if (frozen || signInStatus.inProgress) return
+    void window.api.session.signIn()
+  })
+
+  window.api.session.onSignInStatus((s) => {
+    signInStatus = s
+    if (!frozen) paintSignIn()
+  })
+
   window.api.session.onUsage((u) => {
     usage = { ...usage, ...u }
     if (frozen) paintUsage()
@@ -120,11 +150,13 @@ export async function mountStatusBar(container: HTMLElement): Promise<StatusBarH
       frozen = true
       container.classList.remove('status-bar-config')
       container.classList.add('status-bar-monitoring')
-      // Insert usage chips after the existing config readout.
-      const sep3 = document.createElement('span')
-      sep3.className = 'sb-sep'
-      sep3.textContent = '|'
-      container.append(sep3, usageWrap)
+      // Remove sign-in affordance; replace with usage chips.
+      sep3SignIn.remove()
+      signInItem.remove()
+      const sepUsage = document.createElement('span')
+      sepUsage.className = 'sb-sep'
+      sepUsage.textContent = '|'
+      container.append(sepUsage, usageWrap)
       paint()
     },
   }
