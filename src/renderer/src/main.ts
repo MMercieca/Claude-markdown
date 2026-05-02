@@ -139,6 +139,7 @@ const editor = new EditorView({
       markdown(),
       syntaxHighlighting(markdownHighlight),
       syntaxHighlighting(markdownColors),
+      EditorView.lineWrapping,
       editableCompartment.of(EditorView.editable.of(true)),
       EditorView.theme({
         '&': { background: 'transparent', color: 'inherit', height: '100%' },
