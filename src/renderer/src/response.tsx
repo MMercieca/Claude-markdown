@@ -13,6 +13,15 @@ interface Props {
   streaming: string | null
 }
 
+// While streaming, if the buffer contains an opened-but-unclosed ``` fence,
+// append a synthetic closer so remark parses everything from the opener
+// onward as a code block instead of a paragraph. Avoids the worst flicker
+// case before the model emits the closing fence.
+function closeOpenFence(buf: string): string {
+  const fenceLines = buf.match(/^```/gm)?.length ?? 0
+  return fenceLines % 2 === 1 ? buf + '\n```' : buf
+}
+
 function Transcript({ turns, streaming }: Props): React.JSX.Element {
   const endRef = useRef<HTMLDivElement>(null)
 
@@ -52,7 +61,7 @@ function Transcript({ turns, streaming }: Props): React.JSX.Element {
             remarkPlugins={[remarkGfm]}
             rehypePlugins={[rehypeHighlight]}
           >
-            {streaming}
+            {closeOpenFence(streaming)}
           </ReactMarkdown>
         </div>
       )}

@@ -36,7 +36,7 @@ After every commit the app should run and the new behavior should be exercisable
 - [x] **14. `react-markdown` + `remark-gfm` + `rehype-highlight` in response pane.** Render completed turns as Markdown; pick a highlight theme and apply it to both the response pane (via rehype-highlight CSS) and the prompt editor (via a matching CodeMirror `HighlightStyle` color layer on top of step 12's typographic decorations).
 - [x] **15. Streaming Markdown rendering.** Re-render on every delta. Inline styles snap when delimiters close.
 - [x] **15a. Chat-bubble layout for user vs assistant turns.** User turns render as right-aligned Markdown bubbles (same renderer as assistant turns); assistant turns stay full-width Markdown. Bubbles persist in the transcript on Send.
-- [ ] **16. Fenced-code mid-stream special case.** Detect open ` ``` ` in buffer; render unclosed fence as code immediately.
+- [x] **16. Fenced-code mid-stream special case.** Detect open ` ``` ` in buffer; render unclosed fence as code immediately.
 - [ ] **17. Code block copy button.** Top-right of every rendered block; one click → clipboard.
 
 ## Phase 6 — Status bar
