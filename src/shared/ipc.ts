@@ -48,6 +48,7 @@ export interface UsageState {
   ctxPct?: number       // 0-100, context window utilization
   fiveHourPct?: number  // 0-100, 5-hour rate limit
   sevenDayPct?: number  // 0-100, 7-day rate limit (worst of opus/sonnet/global)
+  costUsd?: number      // accumulated session cost; undefined when subscription auth
 }
 
 export interface MainToRenderer {

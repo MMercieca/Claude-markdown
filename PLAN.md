@@ -44,7 +44,8 @@ After every commit the app should run and the new behavior should be exercisable
 - [x] **18. Status bar config mode.** Show `cwd | model | effort` with `[change]` affordances. `cwd` → native folder picker; `model` / `effort` → dropdowns. Defaults from `$PWD`/`$HOME` and `~/.claude/settings.json`.
 - [x] **18a. Claude-style activity spinner in response pane.** While a query is active, show an animated spinner (matching Claude's dot/ellipsis pulse style) at the bottom of the response pane. Spinner disappears on `session:done`. Covers the gap between send and first token.
 - [x] **19. Transition to monitoring mode on first send.** Pickers freeze read-only. Add `Ctx N% • 5h N% • 7d N%` from `SDKResultMessage`; threshold colors (green/amber/red).
-- [ ] **20. Cost estimate field.** Hardcoded per-model price table → `~$X.XX`. Hidden under Pro/Max subscription auth (detect via SDK auth mode).
+- [x] **20. Cost estimate field.** Hardcoded per-model price table → `~$X.XX`. Hidden under Pro/Max subscription auth (detect via SDK auth mode).
+  - ⚠️ Bug: cost chip is absent even on API-key sessions (`accountInfo()` may be returning a `subscriptionType` unexpectedly, or the call is failing silently). Needs investigation.
 
 ## Phase 7 — Right-side status pane
 

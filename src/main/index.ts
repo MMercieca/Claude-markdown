@@ -162,6 +162,18 @@ async function runQueryLoop(
     },
   })
   session.activeQueryObj = q
+
+  // Detect subscription vs API-key auth once per session. Subscription users
+  // don't pay per-token so we hide the cost chip; API-key users do.
+  let showCost = false
+  try {
+    const info = await q.accountInfo()
+    showCost = !info.subscriptionType
+    if (showCost) session.usage.costUsd = 0
+  } catch (err) {
+    console.warn('[session] accountInfo failed:', err)
+  }
+
   try {
     for await (const msg of q) {
       if (win.isDestroyed()) break
@@ -182,13 +194,16 @@ async function runQueryLoop(
         // streaming-input mode — it arrives after all stream_event deltas
         // for a turn. (The 'assistant' SDK message arrives before the
         // deltas, not after, so it can't be used to mark turn end.)
+        if (showCost) {
+          session.usage.costUsd = (session.usage.costUsd ?? 0) + msg.total_cost_usd
+        }
         try {
           const ctx = await q.getContextUsage()
           session.usage.ctxPct = Math.round(ctx.percentage)
-          win.webContents.send('session:usage', session.usage)
         } catch (err) {
           console.warn('[session] getContextUsage failed:', err)
         }
+        win.webContents.send('session:usage', session.usage)
         if (session.activeQuery) {
           session.activeQuery = false
           win.webContents.send('session:done')

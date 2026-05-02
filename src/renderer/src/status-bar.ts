@@ -65,6 +65,7 @@ export async function mountStatusBar(container: HTMLElement): Promise<StatusBarH
   function paintUsage(): void {
     const parts: string[] = []
     parts.push(usageChip('Ctx', usage.ctxPct))
+    if (usage.costUsd !== undefined) parts.push(costChip(usage.costUsd))
     parts.push(usageChip('5h',  usage.fiveHourPct))
     parts.push(usageChip('7d',  usage.sevenDayPct))
     usageWrap.innerHTML = parts.join('<span class="sb-usage-sep">•</span>')
@@ -129,6 +130,11 @@ function usageChip(label: string, pct: number | undefined): string {
   }
   const color = pct > 85 ? 'red' : pct >= 60 ? 'amber' : 'green'
   return `<span class="sb-usage-chip"><span class="sb-usage-label">${label}</span> <span class="sb-usage-pct sb-usage-${color}">${pct}%</span></span>`
+}
+
+function costChip(usd: number): string {
+  const formatted = usd < 0.01 && usd > 0 ? '<$0.01' : `$${usd.toFixed(2)}`
+  return `<span class="sb-usage-chip"><span class="sb-usage-pct">~${escapeHtml(formatted)}</span></span>`
 }
 
 function escapeHtml(s: string): string {
