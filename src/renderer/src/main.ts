@@ -4,10 +4,13 @@ import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
 import { markdown } from '@codemirror/lang-markdown'
 import { syntaxHighlighting, HighlightStyle } from '@codemirror/language'
 import { tags } from '@lezer/highlight'
+import 'highlight.js/styles/github.css'
+import { ResponseView } from './response'
 
 const leftCol = document.getElementById('left-col') as HTMLElement
 const responsePane = document.getElementById('response-pane') as HTMLElement
 const responseContent = document.getElementById('response-content') as HTMLElement
+const responseView = new ResponseView(responseContent)
 const promptPane = document.getElementById('prompt-pane') as HTMLElement
 const promptEditorEl = document.getElementById('prompt-editor') as HTMLElement
 const colDivider = document.getElementById('col-divider') as HTMLElement
@@ -95,6 +98,15 @@ const markdownHighlight = HighlightStyle.define([
   { tag: tags.processingInstruction, opacity: '0.4' },
 ])
 
+// Color layer matched to the github (light) highlight.js theme used in the
+// response pane, so code/headings/links read the same on both sides.
+const markdownColors = HighlightStyle.define([
+  { tag: tags.heading,   color: '#8250df' },
+  { tag: tags.monospace, color: '#0a3069' },
+  { tag: tags.link,      color: '#0969da' },
+  { tag: tags.url,       color: '#0969da' },
+])
+
 const editableCompartment = new Compartment()
 
 // Tracks whether the agent is currently generating. Read by both the Escape
@@ -116,6 +128,8 @@ const editor = new EditorView({
           view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: '' } })
           view.dispatch({ effects: editableCompartment.reconfigure(EditorView.editable.of(false)) })
           agentActive = true
+          responseView.addUserTurn(text)
+          responseView.startAssistantTurn()
           void window.api.session.send(text)
           return true
         },
@@ -124,6 +138,7 @@ const editor = new EditorView({
       keymap.of([...defaultKeymap, ...historyKeymap]),
       markdown(),
       syntaxHighlighting(markdownHighlight),
+      syntaxHighlighting(markdownColors),
       editableCompartment.of(EditorView.editable.of(true)),
       EditorView.theme({
         '&': { background: 'transparent', color: 'inherit', height: '100%' },
@@ -140,12 +155,12 @@ const editor = new EditorView({
 // ── Session streaming ───────────────────────────────────────────────────────
 
 window.api.session.onDelta((delta) => {
-  responseContent.textContent = (responseContent.textContent ?? '') + delta
+  responseView.appendDelta(delta)
   responsePane.scrollTop = responsePane.scrollHeight
 })
 
 window.api.session.onDone(() => {
-  responseContent.textContent += '\n'
+  responseView.finishAssistantTurn()
   agentActive = false
   setEditorEditable(true)
   editor.focus()
@@ -156,7 +171,7 @@ window.api.session.onDone(() => {
 document.addEventListener('keydown', (e: KeyboardEvent) => {
   if (e.key === 'Escape' && agentActive) {
     e.preventDefault()
-    responseContent.textContent += '[interrupted]\n'
+    responseView.markInterrupted()
     agentActive = false
     void window.api.session.interrupt()
   }

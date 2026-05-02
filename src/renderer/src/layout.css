@@ -64,9 +64,69 @@ html, body {
 }
 
 #response-content {
-  white-space: pre-wrap;
   word-break: break-word;
   line-height: 1.5;
+}
+
+#response-content .turn {
+  margin-bottom: 16px;
+}
+
+#response-content .turn-user .user-text {
+  white-space: pre-wrap;
+  font-family: inherit;
+  padding: 8px 12px;
+  border-left: 3px solid var(--divider-active);
+  opacity: 0.85;
+}
+
+#response-content .streaming-text {
+  white-space: pre-wrap;
+  font-family: inherit;
+}
+
+#response-content .interrupted {
+  opacity: 0.6;
+  font-style: italic;
+  margin-top: 4px;
+}
+
+#response-content h1 { font-size: 1.6em; margin: 0.6em 0 0.4em; font-weight: 700; }
+#response-content h2 { font-size: 1.35em; margin: 0.6em 0 0.4em; font-weight: 700; }
+#response-content h3 { font-size: 1.15em; margin: 0.6em 0 0.4em; font-weight: 700; }
+#response-content p { margin: 0.4em 0; }
+#response-content ul, #response-content ol { margin: 0.4em 0; padding-left: 1.5em; }
+#response-content li { margin: 0.15em 0; }
+#response-content blockquote {
+  margin: 0.4em 0;
+  padding-left: 12px;
+  border-left: 3px solid var(--divider);
+  opacity: 0.85;
+}
+#response-content table { border-collapse: collapse; margin: 0.5em 0; }
+#response-content th, #response-content td {
+  border: 1px solid var(--divider);
+  padding: 4px 8px;
+}
+#response-content :not(pre) > code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9em;
+  background: rgba(110, 118, 129, 0.15);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+#response-content pre {
+  background: #f6f8fa;
+  border-radius: 6px;
+  padding: 12px;
+  overflow-x: auto;
+  margin: 0.5em 0;
+}
+#response-content pre code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9em;
+  background: transparent;
+  padding: 0;
 }
 
 #row-divider {
