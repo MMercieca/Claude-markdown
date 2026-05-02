@@ -185,6 +185,54 @@ html, body {
   padding: 12px;
 }
 
+.auth-banner {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  border-radius: 6px;
+  background: rgba(207, 34, 46, 0.08);
+  border: 1px solid rgba(207, 34, 46, 0.3);
+  font-size: 12px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .auth-banner {
+    background: rgba(248, 81, 73, 0.1);
+    border-color: rgba(248, 81, 73, 0.3);
+  }
+}
+
+.auth-banner-msg { flex: 1; min-width: 0; }
+
+.auth-banner-actions {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.auth-banner-action,
+.auth-banner-dismiss {
+  background: transparent;
+  border: 1px solid var(--divider);
+  border-radius: 4px;
+  padding: 2px 8px;
+  font: inherit;
+  font-size: 11px;
+  color: inherit;
+  cursor: pointer;
+}
+
+.auth-banner-action:hover,
+.auth-banner-dismiss:hover { background: var(--divider); }
+
+.auth-banner-dismiss { opacity: 0.6; }
+
+.auth-banner-hint { opacity: 0.7; font-size: 11px; font-family: ui-monospace, monospace; }
+
 #response-content {
   word-break: break-word;
   line-height: 1.5;

@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type ComponentPropsWithoutRef } from 'reac
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeHighlight from 'rehype-highlight'
+import type { AuthError } from '../../shared/ipc'
 
 function CodeBlock({ children, ...props }: ComponentPropsWithoutRef<'pre'>): React.JSX.Element {
   const preRef = useRef<HTMLPreElement>(null)
@@ -33,9 +34,52 @@ export type Turn =
   | { role: 'user'; text: string }
   | { role: 'assistant'; text: string; interrupted?: boolean }
 
+const ANTHROPIC_API_DOCS = 'https://docs.anthropic.com/en/api/getting-started'
+
+function AuthBanner({ error, onDismiss }: { error: AuthError; onDismiss: () => void }): React.JSX.Element {
+  const actions: React.JSX.Element[] = []
+
+  if (error.authMode === 'claude-ai') {
+    actions.push(
+      <button key="signin" className="auth-banner-action" type="button"
+        onClick={() => { void window.api.session.signIn(); onDismiss() }}>
+        Sign in
+      </button>
+    )
+  } else if (error.authMode === 'api-key') {
+    actions.push(
+      <button key="docs" className="auth-banner-action" type="button"
+        onClick={() => void window.api.system.openUrl(ANTHROPIC_API_DOCS)}>
+        API key docs ↗
+      </button>
+    )
+  } else if (error.authMode === 'bedrock') {
+    actions.push(
+      <span key="bedrock-hint" className="auth-banner-hint">
+        Check AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_REGION
+      </span>
+    )
+  }
+
+  actions.push(
+    <button key="dismiss" className="auth-banner-dismiss" type="button" onClick={onDismiss}>
+      Dismiss
+    </button>
+  )
+
+  return (
+    <div className="auth-banner" role="alert">
+      <span className="auth-banner-msg">{error.message}</span>
+      <span className="auth-banner-actions">{actions}</span>
+    </div>
+  )
+}
+
 interface Props {
   turns: Turn[]
   streaming: string | null
+  authError: AuthError | null
+  onDismissAuthError: () => void
 }
 
 // While streaming, if the buffer contains an opened-but-unclosed ``` fence,
@@ -47,7 +91,7 @@ function closeOpenFence(buf: string): string {
   return fenceLines % 2 === 1 ? buf + '\n```' : buf
 }
 
-function Transcript({ turns, streaming }: Props): React.JSX.Element {
+function Transcript({ turns, streaming, authError, onDismissAuthError }: Props): React.JSX.Element {
   const endRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -56,6 +100,7 @@ function Transcript({ turns, streaming }: Props): React.JSX.Element {
 
   return (
     <>
+      {authError && <AuthBanner error={authError} onDismiss={onDismissAuthError} />}
       {turns.map((turn, i) => (
         <div key={i} className={`turn turn-${turn.role}`}>
           {turn.role === 'user' ? (
@@ -109,6 +154,7 @@ export class ResponseView {
   private root: Root
   private turns: Turn[] = []
   private streaming: string | null = null
+  private authError: AuthError | null = null
 
   constructor(container: HTMLElement) {
     this.root = createRoot(container)
@@ -116,7 +162,19 @@ export class ResponseView {
   }
 
   private render(): void {
-    this.root.render(<Transcript turns={this.turns} streaming={this.streaming} />)
+    this.root.render(
+      <Transcript
+        turns={this.turns}
+        streaming={this.streaming}
+        authError={this.authError}
+        onDismissAuthError={() => { this.authError = null; this.render() }}
+      />
+    )
+  }
+
+  showAuthError(error: AuthError | null): void {
+    this.authError = error
+    this.render()
   }
 
   addUserTurn(text: string): void {

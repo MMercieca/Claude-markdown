@@ -171,6 +171,16 @@ window.api.session.onDone(() => {
   editor.focus()
 })
 
+window.api.session.onAuthError((error) => {
+  responseView.showAuthError(error)
+})
+
+window.api.session.onSignInStatus((status) => {
+  if (!status.inProgress && !status.error) {
+    responseView.showAuthError(null)
+  }
+})
+
 // Escape is handled at the document level because the editor is non-editable
 // while the agent is active and won't dispatch keymaps in that state.
 document.addEventListener('keydown', (e: KeyboardEvent) => {

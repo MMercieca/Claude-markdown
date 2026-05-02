@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { LayoutState, ConfigBootstrap, EffortLevel, AuthMode, UsageState, AuthInfo, SignInStatus } from '../shared/ipc'
+import type { LayoutState, ConfigBootstrap, EffortLevel, AuthMode, UsageState, AuthInfo, SignInStatus, AuthError } from '../shared/ipc'
 
 // Ergonomic nested API exposed to the renderer. Each method wraps
 // ipcRenderer.invoke so the renderer never sees ipcRenderer directly.
@@ -67,10 +67,21 @@ const api = {
       ipcRenderer.on('session:signInStatus', listener)
       return () => ipcRenderer.removeListener('session:signInStatus', listener)
     },
+
+    onAuthError: (cb: (error: AuthError | null) => void): (() => void) => {
+      const listener = (_e: Electron.IpcRendererEvent, error: AuthError | null) => cb(error)
+      ipcRenderer.on('session:authError', listener)
+      return () => ipcRenderer.removeListener('session:authError', listener)
+    },
+  },
+
+  system: {
+    openUrl: (url: string): Promise<void> =>
+      ipcRenderer.invoke('system:openUrl', url) as Promise<void>,
   },
 } as const
 
 contextBridge.exposeInMainWorld('api', api)
 
 export type Api = typeof api
-export type { LayoutState, ConfigBootstrap, EffortLevel, AuthMode, UsageState, AuthInfo, SignInStatus }
+export type { LayoutState, ConfigBootstrap, EffortLevel, AuthMode, UsageState, AuthInfo, SignInStatus, AuthError }

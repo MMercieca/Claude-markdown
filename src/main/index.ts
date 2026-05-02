@@ -14,6 +14,7 @@ import type {
   UsageState,
   AuthInfo,
   SignInStatus,
+  AuthError,
 } from '../shared/ipc'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -204,13 +205,24 @@ async function runQueryLoop(
   } catch (err) {
     console.warn('[session] accountInfo failed:', err)
     win.webContents.send('session:auth', { label: 'unknown', showCost: false })
+    const authError: AuthError = {
+      authMode: session.authMode,
+      message: 'Authentication failed. Please check your credentials.',
+    }
+    win.webContents.send('session:authError', authError)
   }
 
   try {
     for await (const msg of q) {
       if (win.isDestroyed()) break
 
-      if (msg.type === 'stream_event') {
+      if (msg.type === 'assistant' && msg.error === 'authentication_failed') {
+        const authError: AuthError = {
+          authMode: session.authMode,
+          message: 'Authentication failed during the session.',
+        }
+        win.webContents.send('session:authError', authError)
+      } else if (msg.type === 'stream_event') {
         const { event: streamEvent } = msg
         if (
           streamEvent.type === 'content_block_delta' &&
@@ -339,6 +351,12 @@ ipcMain.handle('session:send', (event, text: string): void => {
   }
 
   session.promptChannel.push(text)
+})
+
+// ── System IPC handlers ─────────────────────────────────────────────────────
+
+ipcMain.handle('system:openUrl', async (_event, url: string): Promise<void> => {
+  await shell.openExternal(url)
 })
 
 // ── IPC handlers ────────────────────────────────────────────────────────────

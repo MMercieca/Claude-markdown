@@ -75,10 +75,21 @@ export interface SignInStatus {
   error?: string
 }
 
+export interface AuthError {
+  authMode: AuthMode
+  /** human-readable description of what went wrong */
+  message: string
+}
+
 export interface MainToRenderer {
   'session:delta': string  // partial text delta while streaming
   'session:done': void     // query completed
   'session:usage': UsageState  // partial usage update; merge with prior state
   'session:auth': AuthInfo    // one-time auth mode signal after accountInfo() resolves
   'session:signInStatus': SignInStatus  // progress/result of claude.ai OAuth sign-in
+  'session:authError': AuthError | null  // null = dismiss the banner
+}
+
+export interface RendererToSystem {
+  'system:openUrl'(url: string): void
 }
