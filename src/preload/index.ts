@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { LayoutState, ConfigBootstrap, EffortLevel, UsageState } from '../shared/ipc'
+import type { LayoutState, ConfigBootstrap, EffortLevel, UsageState, AuthInfo } from '../shared/ipc'
 
 // Ergonomic nested API exposed to the renderer. Each method wraps
 // ipcRenderer.invoke so the renderer never sees ipcRenderer directly.
@@ -50,10 +50,16 @@ const api = {
       ipcRenderer.on('session:usage', listener)
       return () => ipcRenderer.removeListener('session:usage', listener)
     },
+
+    onAuth: (cb: (auth: AuthInfo) => void): (() => void) => {
+      const listener = (_e: Electron.IpcRendererEvent, auth: AuthInfo) => cb(auth)
+      ipcRenderer.on('session:auth', listener)
+      return () => ipcRenderer.removeListener('session:auth', listener)
+    },
   },
 } as const
 
 contextBridge.exposeInMainWorld('api', api)
 
 export type Api = typeof api
-export type { LayoutState, ConfigBootstrap, EffortLevel, UsageState }
+export type { LayoutState, ConfigBootstrap, EffortLevel, UsageState, AuthInfo }

@@ -51,6 +51,18 @@ query({
 
 `settingSources` defaults to all-loaded for `query()`, but explicit is future-proof.
 
+## Authentication
+
+The agent loop runs against one of three providers, selected per window before the first prompt:
+
+- **API key** — `ANTHROPIC_API_KEY` env var. Per-token billing surfaces as a `~$X.XX` chip in the status bar (computed from `SDKResultMessage.total_cost_usd`).
+- **claude.ai OAuth (Pro/Max)** — interactive browser login via `q.claudeAuthenticate(true)` + `shell.openExternal`. The SDK persists tokens to disk; subsequent sessions reuse them silently. No cost chip (subscription billing is opaque to the host). Rate-limit chips (`5h`, `7d`) only populate in this mode — they're driven by `SDKRateLimitEvent` messages, which the SDK only emits for subscription accounts.
+- **Amazon Bedrock** — opt-in via `CLAUDE_CODE_USE_BEDROCK=1` plus the standard AWS credential chain (env vars, `~/.aws/credentials`, IAM role). Model IDs likely need to be Bedrock inference-profile ARNs rather than the bare `claude-opus-4-7` form — to be confirmed during implementation. No cost chip (org-level billing). No rate-limit chips (Bedrock surfaces quota as 429 errors rather than utilization events).
+
+Auth provider is detected via `q.accountInfo()` (`apiProvider`, `subscriptionType`) and rendered as a fourth field in the config-mode status bar: `cwd | model | effort | auth`. The `auth` field doubles as the picker; the Bedrock option is grayed out unless its env vars are present, with a tooltip explaining what's missing. Mid-session changes require `/clear`.
+
+Auth-mode selection is the load-bearing input for several conditional UI behaviors (cost chip visibility, rate-limit chip visibility, eligible model list), so it's surfaced once via `accountInfo()` rather than rederived per-feature.
+
 ## Conversation model
 
 - **Persistent multi-turn within a session.** Single `query()` call with an async-generator prompt that yields each new user message. Agent stays alive between turns and remembers everything; SDK handles compaction.

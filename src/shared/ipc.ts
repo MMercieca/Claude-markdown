@@ -44,15 +44,27 @@ export interface RendererToMain {
   'config:setEffort'(effort: EffortLevel): void
 }
 
+export type RateLimitStatus = 'allowed' | 'allowed_warning' | 'rejected'
+
 export interface UsageState {
-  ctxPct?: number       // 0-100, context window utilization
-  fiveHourPct?: number  // 0-100, 5-hour rate limit
-  sevenDayPct?: number  // 0-100, 7-day rate limit (worst of opus/sonnet/global)
-  costUsd?: number      // accumulated session cost; undefined when subscription auth
+  ctxPct?: number              // 0-100, context window utilization
+  fiveHourPct?: number         // 0-100, 5-hour rate limit (absent when SDK omits utilization)
+  fiveHourStatus?: RateLimitStatus
+  sevenDayPct?: number         // 0-100, 7-day rate limit (worst of opus/sonnet/global)
+  sevenDayStatus?: RateLimitStatus
+  costUsd?: number             // accumulated session cost; undefined when subscription auth
+}
+
+export interface AuthInfo {
+  /** Human-readable label, e.g. "api-key", "claude-ai · max", "bedrock" */
+  label: string
+  /** Whether to show the cost chip (false for subscription / Bedrock) */
+  showCost: boolean
 }
 
 export interface MainToRenderer {
   'session:delta': string  // partial text delta while streaming
   'session:done': void     // query completed
   'session:usage': UsageState  // partial usage update; merge with prior state
+  'session:auth': AuthInfo    // one-time auth mode signal after accountInfo() resolves
 }

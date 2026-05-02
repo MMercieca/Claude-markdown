@@ -1,4 +1,4 @@
-import type { ConfigBootstrap, EffortLevel, ModelOption, UsageState } from '../../shared/ipc'
+import type { ConfigBootstrap, EffortLevel, ModelOption, UsageState, AuthInfo, RateLimitStatus } from '../../shared/ipc'
 
 export interface StatusBarHandle {
   /** Switch to monitoring mode: pickers freeze, usage chips appear. Idempotent. */
@@ -32,6 +32,7 @@ export async function mountStatusBar(container: HTMLElement): Promise<StatusBarH
   let current: ConfigBootstrap = config
   let frozen = false
   let usage: UsageState = {}
+  let auth: AuthInfo | null = null
 
   container.innerHTML = ''
   container.classList.add('status-bar-config')
@@ -64,10 +65,11 @@ export async function mountStatusBar(container: HTMLElement): Promise<StatusBarH
 
   function paintUsage(): void {
     const parts: string[] = []
+    if (auth) parts.push(authChip(auth.label))
     parts.push(usageChip('Ctx', usage.ctxPct))
-    if (usage.costUsd !== undefined) parts.push(costChip(usage.costUsd))
-    parts.push(usageChip('5h',  usage.fiveHourPct))
-    parts.push(usageChip('7d',  usage.sevenDayPct))
+    if (auth?.showCost && usage.costUsd !== undefined) parts.push(costChip(usage.costUsd))
+    parts.push(rateLimitChip('5h', usage.fiveHourPct, usage.fiveHourStatus))
+    parts.push(rateLimitChip('7d', usage.sevenDayPct, usage.sevenDayStatus))
     usageWrap.innerHTML = parts.join('<span class="sb-usage-sep">•</span>')
   }
 
@@ -103,8 +105,12 @@ export async function mountStatusBar(container: HTMLElement): Promise<StatusBarH
   })
 
   window.api.session.onUsage((u) => {
-    // Merge — main only sends fields that changed this turn.
     usage = { ...usage, ...u }
+    if (frozen) paintUsage()
+  })
+
+  window.api.session.onAuth((a) => {
+    auth = a
     if (frozen) paintUsage()
   })
 
@@ -124,12 +130,28 @@ export async function mountStatusBar(container: HTMLElement): Promise<StatusBarH
   }
 }
 
+function authChip(label: string): string {
+  return `<span class="sb-usage-chip sb-auth-chip">${escapeHtml(label)}</span>`
+}
+
 function usageChip(label: string, pct: number | undefined): string {
   if (pct === undefined) {
     return `<span class="sb-usage-chip"><span class="sb-usage-label">${label}</span> <span class="sb-usage-pct sb-usage-pending">—</span></span>`
   }
   const color = pct > 85 ? 'red' : pct >= 60 ? 'amber' : 'green'
   return `<span class="sb-usage-chip"><span class="sb-usage-label">${label}</span> <span class="sb-usage-pct sb-usage-${color}">${pct}%</span></span>`
+}
+
+function rateLimitChip(label: string, pct: number | undefined, status: RateLimitStatus | undefined): string {
+  if (pct !== undefined) {
+    const color = pct > 85 ? 'red' : pct >= 60 ? 'amber' : 'green'
+    return `<span class="sb-usage-chip"><span class="sb-usage-label">${label}</span> <span class="sb-usage-pct sb-usage-${color}">${pct}%</span></span>`
+  }
+  if (status !== undefined) {
+    const [color, symbol] = status === 'rejected' ? ['red', '✗'] : status === 'allowed_warning' ? ['amber', '!'] : ['green', '✓']
+    return `<span class="sb-usage-chip"><span class="sb-usage-label">${label}</span> <span class="sb-usage-pct sb-usage-${color}">${symbol}</span></span>`
+  }
+  return `<span class="sb-usage-chip"><span class="sb-usage-label">${label}</span> <span class="sb-usage-pct sb-usage-pending">—</span></span>`
 }
 
 function costChip(usd: number): string {

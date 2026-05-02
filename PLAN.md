@@ -47,58 +47,70 @@ After every commit the app should run and the new behavior should be exercisable
 - [x] **20. Cost estimate field.** Hardcoded per-model price table → `~$X.XX`. Hidden under Pro/Max subscription auth (detect via SDK auth mode).
   - ⚠️ Bug: cost chip is absent even on API-key sessions (`accountInfo()` may be returning a `subscriptionType` unexpectedly, or the call is failing silently). Needs investigation.
 
-## Phase 7 — Right-side status pane
+## Phase 7 — Authentication modes
 
-- [ ] **21. Sticky header: idle vs active.** Active: current activity string + `[Interrupt]`. Idle: last-turn tokens, model, latency.
-- [ ] **22. Structured event log.** Per-tool card: name, expandable input args, expandable output. `--- Turn N ---` separators.
-- [ ] **23. Tool chips in response pane (no inline output).** `⚙ Read foo.ts ✓` etc.; click → scroll/expand the matching right-pane card.
-- [ ] **24. `Structured | Raw JSON` toggle.** Raw view pretty-prints every SDK event in fenced JSON blocks.
+Adds support for **claude.ai OAuth** (Pro/Max subscription, used at home) and **Amazon Bedrock** (used at work) alongside the existing API-key path. The SDK already provides the primitives — this phase wires them into the UI and verifies each mode end-to-end.
 
-## Phase 8 — Permissions
+- [x] **21. Surface current auth mode in the status bar.** After session bootstrap, call `q.accountInfo()` and emit an `auth` chip alongside the existing usage chips: `api-key`, `claude-ai · max`, `bedrock`, etc. Drives all conditional UI (e.g. cost-chip visibility from step 20). Fixes the bug noted under step 20 — cost chip currently absent because subscription detection isn't being read correctly.
+  - ⚠️ The SDK's `rate_limit_event` omits `utilization` when `status` is `allowed`; we show `✓`/`!`/`✗` as a fallback. Investigate whether a separate API or a different SDK event can supply the actual percentage (e.g. only provided at `allowed_warning`/`rejected` thresholds).
+- [ ] **22. Bedrock provider via environment.** Honor `CLAUDE_CODE_USE_BEDROCK=1`, `AWS_REGION`, and the standard AWS credential chain (env vars / `~/.aws/credentials` / IAM role). No new UI beyond the auth chip from step 21. Smoke-test against a real Bedrock account; document any model-ID remap needed for Opus/Sonnet (Bedrock uses ARNs, not the bare model IDs from `~/.claude/settings.json`).
+- [ ] **23. claude.ai OAuth login flow.** "Sign in with Claude" affordance in config mode. On click: call `q.claudeAuthenticate(true)`, open the returned URL via `shell.openExternal`, and either await `q.claudeOAuthWaitForCompletion()` or — if the SDK requires the host to handle the redirect — register a `claude-markdown://oauth` protocol with `app.setAsDefaultProtocolClient` and forward `code`/`state` to `q.claudeOAuthCallback`. First task: confirm which path the SDK actually wants.
+- [ ] **24. Auth-mode picker in config mode.** Fourth field in the config status bar: `cwd | model | effort | auth`. Options: `api-key` (default when `ANTHROPIC_API_KEY` is set), `claude-ai` (subscription OAuth), `bedrock` (only selectable when its env vars are present, else grayed out with a tooltip explaining the missing vars). Mid-session changes require `/clear`.
+- [ ] **25. Auth error surfacing.** On `accountInfo()` failure or 401-style errors during a turn, render a blocking banner with `[Sign in]` (claude.ai), `[Set API key]` (with link to docs), or `[Check AWS credentials]` (Bedrock). Minimal placeholder banner now; folded into the general error-banner system once Phase 14 (Errors + compaction) lands.
 
-- [ ] **25. `canUseTool` with auto-allowlist.** `Read/Glob/Grep/WebFetch/WebSearch` pass through silently; everything else denied for now (so the modal is the next commit, not a regression).
-- [ ] **26. Permission modal as right-pane card.** `[Allow] [Deny]` + `y`/`n` keystrokes; auto-focus when shown; agent paused until resolved. Inherit `~/.claude/settings.json` rules — only prompt for items not pre-allowed.
-- [ ] **27. Multi-option flows.** `1`/`2`/`3` for "allow once / allow session / deny" when SDK offers options.
+## Phase 8 — Right-side status pane
 
-## Phase 9 — Slash commands
+- [ ] **26. Sticky header: idle vs active.** Active: current activity string + `[Interrupt]`. Idle: last-turn tokens, model, latency.
+- [ ] **27. Structured event log.** Per-tool card: name, expandable input args, expandable output. `--- Turn N ---` separators.
+- [ ] **28. Tool chips in response pane (no inline output).** `⚙ Read foo.ts ✓` etc.; click → scroll/expand the matching right-pane card.
+- [ ] **29. `Structured | Raw JSON` toggle.** Raw view pretty-prints every SDK event in fenced JSON blocks.
 
-- [ ] **28. App-intercepted allowlist: `/clear`, `/help`, `/cost`. `/insights`** `/clear` rebuilds session in same window (preserves `cwd`, defaults `model`/`effort`). `/help` overlay with keybindings. `/cost` scrolls right pane to usage. Everything else passes through to SDK unchanged.
-- [ ] **29. `/model [name]` and `/model`.** Mid-session via `setModel()`; bare form lists models in right pane.
-- [ ] **30. `/effort [level]` with lifecycle guard.** Only valid before first prompt; otherwise error message pointing to `/clear`. Verify `/effort high` → `/clear` → next `query()` carries `effort: 'high'` (one of the design's known-unknowns).
+## Phase 9 — Permissions
 
-## Phase 10 - Building
+- [ ] **30. `canUseTool` with auto-allowlist.** `Read/Glob/Grep/WebFetch/WebSearch` pass through silently; everything else denied for now (so the modal is the next commit, not a regression).
+- [ ] **31. Permission modal as right-pane card.** `[Allow] [Deny]` + `y`/`n` keystrokes; auto-focus when shown; agent paused until resolved. Inherit `~/.claude/settings.json` rules — only prompt for items not pre-allowed.
+- [ ] **32. Multi-option flows.** `1`/`2`/`3` for "allow once / allow session / deny" when SDK offers options.
 
-- [ ] **31. Application build.** Ensure the application can be built on MacOS.
-- [ ] **32. Shell shortcut.** Provide a small shell script that will launch the Electron application and set the `%CWD` variable to the directory the application was launched from.
+## Phase 10 — Slash commands
+
+- [ ] **33. App-intercepted allowlist: `/clear`, `/help`, `/cost`. `/insights`** `/clear` rebuilds session in same window (preserves `cwd`, defaults `model`/`effort`). `/help` overlay with keybindings. `/cost` scrolls right pane to usage. Everything else passes through to SDK unchanged.
+- [ ] **34. `/model [name]` and `/model`.** Mid-session via `setModel()`; bare form lists models in right pane.
+- [ ] **35. `/effort [level]` with lifecycle guard.** Only valid before first prompt; otherwise error message pointing to `/clear`. Verify `/effort high` → `/clear` → next `query()` carries `effort: 'high'` (one of the design's known-unknowns).
+
+## Phase 11 — Building
+
+- [ ] **36. Application build.** Ensure the application can be built on MacOS.
+- [ ] **37. Shell shortcut.** Provide a small shell script that will launch the Electron application and set the `%CWD` variable to the directory the application was launched from.
 
 ## Phase 12 — Attachments
 
-- [ ] **33. File drag-and-drop → Markdown link insert.** `[foo.ts](/abs/path)`.
-- [ ] **34. Image paste → chip → image content block.** Placeholder chip in editor; on Send becomes an Anthropic `image` block; rendered into the transcript.
-- [ ] **35. Reject oversized / over-count.** >5MB or >100 images → explicit error before Send; prompt not cleared.
+- [ ] **38. File drag-and-drop → Markdown link insert.** `[foo.ts](/abs/path)`.
+- [ ] **39. Image paste → chip → image content block.** Placeholder chip in editor; on Send becomes an Anthropic `image` block; rendered into the transcript.
+- [ ] **40. Reject oversized / over-count.** >5MB or >100 images → explicit error before Send; prompt not cleared.
 
 ## Phase 13 — Errors + compaction
 
-- [ ] **36. Tool errors render as red chip + red right-pane card.** Permission denials show `denied` status (not error styling).
-- [ ] **37. Blocking error banner with `[Retry] [Dismiss]`.** Network/4xx/5xx/rate-limit/SDK crash. Quota errors get a live countdown.
-- [ ] **38. Config error banner with `[Reload settings]`.** Hook failures, malformed settings.
-- [ ] **39. Compaction marker.** On `SDKCompactBoundaryMessage`: thin divider in transcript with `[show summary]` toggle; mirrored card in right pane; usage display reflects post-compact state.
+- [ ] **41. Tool errors render as red chip + red right-pane card.** Permission denials show `denied` status (not error styling).
+- [ ] **42. Blocking error banner with `[Retry] [Dismiss]`.** Network/4xx/5xx/rate-limit/SDK crash. Quota errors get a live countdown.
+- [ ] **43. Config error banner with `[Reload settings]`.** Hook failures, malformed settings.
+- [ ] **44. Compaction marker.** On `SDKCompactBoundaryMessage`: thin divider in transcript with `[show summary]` toggle; mirrored card in right pane; usage display reflects post-compact state.
 
 ## Phase 14 — Multi-window + MCP polish
 
-- [ ] **40. `Cmd+N` new window in config mode; `Cmd+W` interrupts + cleans up.** macOS Window menu lists windows; app survives last-window-close.
-- [ ] **41. MCP auth via `shell.openExternal`.** When an MCP auth tool emits a "visit this URL" message, open in user's real browser.
-- [ ] **42. Optional `statusLine` shell-out.** Opt-in via app config; appended to right of status bar.
+- [ ] **45. `Cmd+N` new window in config mode; `Cmd+W` interrupts + cleans up.** macOS Window menu lists windows; app survives last-window-close.
+- [ ] **46. MCP auth via `shell.openExternal`.** When an MCP auth tool emits a "visit this URL" message, open in user's real browser.
+- [ ] **47. Optional `statusLine` shell-out.** Opt-in via app config; appended to right of status bar.
 
 ## Phase 15 — Smoke tests for the known unknowns (optional)
 
-- [ ] **43. Verify user-level `CLAUDE.md` loads** with `settingSources: ['user','project','local']`.
-- [ ] **44. Force a mid-stream compaction** to confirm divider rendering doesn't corrupt a partial assistant message; fix if needed.
+- [ ] **48. Verify user-level `CLAUDE.md` loads** with `settingSources: ['user','project','local']`.
+- [ ] **49. Force a mid-stream compaction** to confirm divider rendering doesn't corrupt a partial assistant message; fix if needed.
 ---
 
 ## Ordering notes
 
 - **Steps 6–7 come before any UI features.** The design explicitly says window-ID keying is the one architectural decision to make day one — doing it before there are handlers to retrofit costs almost nothing.
-- **Step 25 intentionally denies non-allowlisted tools** so step 26 isn't fixing a regression — it's adding a missing capability.
-- **Phases 5 and 7 stay decoupled.** Tool chips (step 23) need both the response transcript and the right-pane cards, so it sits in phase 7.
-- **Compaction (step 37) lives with errors**, not with response rendering, because the SDK message arrives through the same event stream as errors and is easier to handle once that pipeline is mature.
+- **Phase 7 (auth) sits before the right-side pane** because auth-mode is load-bearing for the cost chip (step 20) and for any per-provider behavior the right-side pane will surface (e.g. Bedrock has no rate-limit events, claude.ai has no cost). Better to expose the signal once than retrofit conditionals later.
+- **Step 30 intentionally denies non-allowlisted tools** so step 31 isn't fixing a regression — it's adding a missing capability.
+- **Phases 5 and 8 stay decoupled.** Tool chips (step 28) need both the response transcript and the right-pane cards, so they sit in phase 8.
+- **Compaction (step 44) lives with errors**, not with response rendering, because the SDK message arrives through the same event stream as errors and is easier to handle once that pipeline is mature.

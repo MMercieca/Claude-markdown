@@ -11,6 +11,7 @@ import type {
   ModelOption,
   ConfigBootstrap,
   UsageState,
+  AuthInfo,
 } from '../shared/ipc'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -129,17 +130,21 @@ async function getUserSettings(): Promise<UserSettings> {
 // context % is recomputed after every turn via q.getContextUsage().
 
 function applyRateLimitEvent(session: SessionState, info: SDKRateLimitInfo): void {
-  if (info.utilization === undefined || info.rateLimitType === undefined) return
-  const pct = Math.round(info.utilization * 100)
+  if (info.rateLimitType === undefined) return
+  const status = info.status
+  const pct = info.utilization !== undefined ? Math.round(info.utilization * 100) : undefined
   if (info.rateLimitType === 'five_hour') {
-    session.usage.fiveHourPct = pct
+    session.usage.fiveHourStatus = status
+    if (pct !== undefined) session.usage.fiveHourPct = pct
   } else if (
     info.rateLimitType === 'seven_day' ||
     info.rateLimitType === 'seven_day_opus' ||
     info.rateLimitType === 'seven_day_sonnet'
   ) {
-    // Worst-of across the three 7d limits — that's the user-visible ceiling.
-    session.usage.sevenDayPct = Math.max(session.usage.sevenDayPct ?? 0, pct)
+    // Worst-of across the three 7d limits.
+    const prevPct = session.usage.sevenDayPct ?? 0
+    session.usage.sevenDayStatus = status
+    if (pct !== undefined) session.usage.sevenDayPct = Math.max(prevPct, pct)
   }
 }
 
@@ -163,15 +168,29 @@ async function runQueryLoop(
   })
   session.activeQueryObj = q
 
-  // Detect subscription vs API-key auth once per session. Subscription users
-  // don't pay per-token so we hide the cost chip; API-key users do.
+  // Detect auth mode once per session. Drives cost-chip visibility and the
+  // auth chip in the status bar.
   let showCost = false
   try {
     const info = await q.accountInfo()
-    showCost = !info.subscriptionType
+    const provider = info.apiProvider ?? 'firstParty'
+    const isFirstParty = provider === 'firstParty'
+    const isSubscription = isFirstParty && !!info.subscriptionType
+    showCost = isFirstParty && !isSubscription
+
+    let label: string
+    if (isFirstParty) {
+      label = isSubscription ? `claude-ai · ${info.subscriptionType}` : 'api-key'
+    } else {
+      label = provider  // 'bedrock', 'vertex', etc.
+    }
+
+    const authInfo: AuthInfo = { label, showCost }
+    win.webContents.send('session:auth', authInfo)
     if (showCost) session.usage.costUsd = 0
   } catch (err) {
     console.warn('[session] accountInfo failed:', err)
+    win.webContents.send('session:auth', { label: 'unknown', showCost: false })
   }
 
   try {
