@@ -14,6 +14,7 @@ const responsePane = document.getElementById('response-pane') as HTMLElement
 const responseContent = document.getElementById('response-content') as HTMLElement
 const statusBar = document.getElementById('status-bar') as HTMLElement
 const rightHeader = document.getElementById('right-header') as HTMLElement
+const rightLog = document.getElementById('right-log') as HTMLElement
 const responseView = new ResponseView(responseContent)
 const statusBarReady = mountStatusBar(statusBar)
 const promptPane = document.getElementById('prompt-pane') as HTMLElement
@@ -117,7 +118,7 @@ const editableCompartment = new Compartment()
 // Tracks whether the agent is currently generating.
 let agentActive = false
 
-const rightPane = mountRightPane(rightHeader, () => {
+const rightPane = mountRightPane(rightHeader, rightLog, () => {
   responseView.markInterrupted()
   agentActive = false
   void window.api.session.interrupt()

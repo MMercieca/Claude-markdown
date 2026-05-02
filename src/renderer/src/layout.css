@@ -103,6 +103,109 @@ html, body {
   font-style: italic;
 }
 
+/* ── Right-pane event log ── */
+
+#right-log {
+  padding: 8px 0;
+}
+
+.rl-turn-sep {
+  font-size: 10px;
+  text-align: center;
+  opacity: 0.35;
+  padding: 8px 12px 4px;
+  user-select: none;
+}
+
+.rl-tool-card {
+  margin: 4px 8px;
+  border: 1px solid var(--divider);
+  border-radius: 5px;
+  font-size: 12px;
+  overflow: hidden;
+}
+
+.rl-tool-card-error {
+  border-color: rgba(207, 34, 46, 0.4);
+}
+
+@media (prefers-color-scheme: dark) {
+  .rl-tool-card-error { border-color: rgba(248, 81, 73, 0.4); }
+}
+
+.rl-card-header {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 8px;
+  cursor: default;
+}
+
+.rl-expand-btn {
+  background: transparent;
+  border: 0;
+  font: inherit;
+  font-size: 9px;
+  color: inherit;
+  opacity: 0.4;
+  cursor: pointer;
+  padding: 0 2px;
+  flex-shrink: 0;
+}
+
+.rl-tool-icon  { opacity: 0.5; flex-shrink: 0; }
+.rl-tool-name  { flex: 1; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rl-tool-status { flex-shrink: 0; font-size: 11px; opacity: 0.6; }
+.rl-status-ok    { color: #1a7f37; opacity: 1; }
+.rl-status-error { color: #cf222e; opacity: 1; }
+
+@media (prefers-color-scheme: dark) {
+  .rl-status-ok    { color: #3fb950; }
+  .rl-status-error { color: #f85149; }
+}
+
+.rl-card-body {
+  border-top: 1px solid var(--divider);
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.rl-section-label {
+  font-size: 10px;
+  opacity: 0.45;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 3px;
+}
+
+.rl-json,
+.rl-output-pre {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0;
+  max-height: 200px;
+  overflow-y: auto;
+  opacity: 0.85;
+}
+
+.rl-error-pre { color: #cf222e; }
+
+@media (prefers-color-scheme: dark) {
+  .rl-error-pre { color: #f85149; }
+}
+
+.rl-text-chip {
+  margin: 3px 8px;
+  font-size: 11px;
+  opacity: 0.45;
+  padding: 2px 4px;
+  user-select: none;
+}
+
 /* ── Left column: status-bar | response-pane | row-divider | prompt-pane ── */
 
 #status-bar {

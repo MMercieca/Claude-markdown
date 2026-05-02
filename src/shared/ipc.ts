@@ -90,6 +90,19 @@ export interface TurnStats {
   model: string
 }
 
+export type LogEventKind = 'turn_start' | 'tool_call' | 'tool_result' | 'assistant_text'
+
+export interface LogEvent {
+  kind: LogEventKind
+  turnNum?: number    // turn_start
+  toolName?: string   // tool_call
+  toolId?: string     // tool_call | tool_result
+  inputJson?: string  // tool_call: JSON.stringify(input, null, 2)
+  outputText?: string // tool_result: extracted text content
+  isError?: boolean   // tool_result
+  textLength?: number // assistant_text: character count
+}
+
 export interface MainToRenderer {
   'session:delta': string  // partial text delta while streaming
   'session:done': void     // query completed
@@ -98,6 +111,7 @@ export interface MainToRenderer {
   'session:signInStatus': SignInStatus  // progress/result of claude.ai OAuth sign-in
   'session:authError': AuthError | null  // null = dismiss the banner
   'session:turnStats': TurnStats        // emitted with each result message
+  'session:logEvent': LogEvent          // structured event for the right-pane log
 }
 
 export interface RendererToSystem {

@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { homedir } from 'node:os'
 import { query } from '@anthropic-ai/claude-agent-sdk'
-import type { SDKUserMessage, SDKRateLimitInfo, Query } from '@anthropic-ai/claude-agent-sdk'
+import type { SDKUserMessage, SDKRateLimitInfo, Query, SDKAssistantMessage } from '@anthropic-ai/claude-agent-sdk'
 import type {
   LayoutState,
   EffortLevel,
@@ -16,6 +16,7 @@ import type {
   SignInStatus,
   AuthError,
   TurnStats,
+  LogEvent,
 } from '../shared/ipc'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -68,6 +69,7 @@ interface SessionState {
   model: string
   effort: EffortLevel
   authMode: AuthMode
+  turnNum: number                   // incremented on each session:send
   usage: UsageState                 // last-known usage; rate-limit fields persist across turns
 }
 
@@ -163,6 +165,54 @@ function applyRateLimitEvent(session: SessionState, info: SDKRateLimitInfo): voi
   }
 }
 
+// ── Log event helpers ───────────────────────────────────────────────────────
+
+function emitLogEvents(win: BrowserWindow, msg: SDKAssistantMessage): void {
+  if (!Array.isArray(msg.message.content)) return
+  for (const block of msg.message.content) {
+    if (block.type === 'tool_use') {
+      const ev: LogEvent = {
+        kind: 'tool_call',
+        toolName: block.name,
+        toolId: block.id,
+        inputJson: JSON.stringify(block.input, null, 2),
+      }
+      win.webContents.send('session:logEvent', ev)
+    } else if (block.type === 'text' && block.text.trim()) {
+      const ev: LogEvent = {
+        kind: 'assistant_text',
+        textLength: block.text.length,
+      }
+      win.webContents.send('session:logEvent', ev)
+    }
+  }
+}
+
+function emitToolResults(win: BrowserWindow, msg: SDKUserMessage): void {
+  const content = msg.message.content
+  if (!Array.isArray(content)) return
+  for (const block of content) {
+    if (typeof block !== 'object' || block === null) continue
+    const b = block as unknown as Record<string, unknown>
+    if (b['type'] !== 'tool_result') continue
+    const outputText = typeof b['content'] === 'string'
+      ? b['content']
+      : Array.isArray(b['content'])
+        ? (b['content'] as Array<{type?: string; text?: string}>)
+            .filter((c) => c.type === 'text')
+            .map((c) => c.text ?? '')
+            .join('\n')
+        : ''
+    const ev: LogEvent = {
+      kind: 'tool_result',
+      toolId: typeof b['tool_use_id'] === 'string' ? b['tool_use_id'] : undefined,
+      outputText,
+      isError: !!b['is_error'],
+    }
+    win.webContents.send('session:logEvent', ev)
+  }
+}
+
 // ── Persistent query loop ───────────────────────────────────────────────────
 // Runs once per window, started on the first session:send.
 // Streams deltas to the renderer; fires session:done after each assistant turn.
@@ -223,6 +273,10 @@ async function runQueryLoop(
           message: 'Authentication failed during the session.',
         }
         win.webContents.send('session:authError', authError)
+      } else if (msg.type === 'assistant' && !msg.error) {
+        emitLogEvents(win, msg)
+      } else if (msg.type === 'user' && msg.parent_tool_use_id !== null) {
+        emitToolResults(win, msg)
       } else if (msg.type === 'stream_event') {
         const { event: streamEvent } = msg
         if (
@@ -351,6 +405,9 @@ ipcMain.handle('session:send', (event, text: string): void => {
   if (!win) return
 
   session.activeQuery = true
+  session.turnNum++
+  const turnStartEvent: LogEvent = { kind: 'turn_start', turnNum: session.turnNum }
+  win.webContents.send('session:logEvent', turnStartEvent)
 
   if (session.promptChannel === null) {
     const channel = new PromptChannel()
@@ -466,6 +523,7 @@ async function createWindow(): Promise<void> {
     model: userSettings.model,
     effort: userSettings.effort,
     authMode: defaultAuthMode(),
+    turnNum: 0,
     usage: {},
   })
 
