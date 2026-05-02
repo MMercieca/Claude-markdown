@@ -86,9 +86,60 @@ html, body {
   font-size: 11px;
 }
 
-.status-bar-config .sb-sep {
+.status-bar-config .sb-sep,
+.status-bar-monitoring .sb-sep {
   opacity: 0.35;
   user-select: none;
+}
+
+/* ── Monitoring mode: pickers read-only, usage chips visible ── */
+
+.status-bar-monitoring .sb-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  background: transparent;
+  border: 0;
+  font: inherit;
+  color: inherit;
+  padding: 2px 4px;
+  cursor: default;
+  max-width: 50%;
+}
+
+.status-bar-monitoring .sb-value {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sb-usage {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-left: 4px;
+}
+
+.sb-usage-sep { opacity: 0.35; user-select: none; }
+
+.sb-usage-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.sb-usage-label { opacity: 0.6; font-size: 11px; }
+.sb-usage-pct   { font-variant-numeric: tabular-nums; font-weight: 600; }
+
+.sb-usage-pending { opacity: 0.4; font-weight: 400; }
+.sb-usage-green   { color: #1a7f37; }
+.sb-usage-amber   { color: #bf8700; }
+.sb-usage-red     { color: #cf222e; }
+
+@media (prefers-color-scheme: dark) {
+  .sb-usage-green { color: #3fb950; }
+  .sb-usage-amber { color: #d29922; }
+  .sb-usage-red   { color: #f85149; }
 }
 
 .sb-dropdown {

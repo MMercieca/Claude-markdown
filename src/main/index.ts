@@ -4,12 +4,13 @@ import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { homedir } from 'node:os'
 import { query } from '@anthropic-ai/claude-agent-sdk'
-import type { SDKUserMessage, Query } from '@anthropic-ai/claude-agent-sdk'
+import type { SDKUserMessage, SDKRateLimitInfo, Query } from '@anthropic-ai/claude-agent-sdk'
 import type {
   LayoutState,
   EffortLevel,
   ModelOption,
   ConfigBootstrap,
+  UsageState,
 } from '../shared/ipc'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -61,6 +62,7 @@ interface SessionState {
   cwd: string
   model: string
   effort: EffortLevel
+  usage: UsageState                 // last-known usage; rate-limit fields persist across turns
 }
 
 const sessions = new Map<number, SessionState>()
@@ -82,8 +84,11 @@ const SDK_DEFAULT_MODEL = 'claude-opus-4-7'
 const SDK_DEFAULT_EFFORT: EffortLevel = 'high'
 
 function defaultCwd(): string {
+  // Terminal launches inherit TERM and a meaningful PWD; Finder/launchd launches
+  // don't set TERM. (Checking PWD !== app.getAppPath() doesn't work in dev,
+  // where electron-vite makes them equal.)
   const pwd = process.env['PWD']
-  if (pwd && pwd !== '/' && pwd !== app.getAppPath()) return pwd
+  if (pwd && pwd !== '/' && process.env['TERM']) return pwd
   return homedir()
 }
 
@@ -119,6 +124,25 @@ async function getUserSettings(): Promise<UserSettings> {
   return cachedUserSettings
 }
 
+// ── Usage tracking ──────────────────────────────────────────────────────────
+// Rate-limit fields persist across turns (the SDK only re-emits them on change);
+// context % is recomputed after every turn via q.getContextUsage().
+
+function applyRateLimitEvent(session: SessionState, info: SDKRateLimitInfo): void {
+  if (info.utilization === undefined || info.rateLimitType === undefined) return
+  const pct = Math.round(info.utilization * 100)
+  if (info.rateLimitType === 'five_hour') {
+    session.usage.fiveHourPct = pct
+  } else if (
+    info.rateLimitType === 'seven_day' ||
+    info.rateLimitType === 'seven_day_opus' ||
+    info.rateLimitType === 'seven_day_sonnet'
+  ) {
+    // Worst-of across the three 7d limits — that's the user-visible ceiling.
+    session.usage.sevenDayPct = Math.max(session.usage.sevenDayPct ?? 0, pct)
+  }
+}
+
 // ── Persistent query loop ───────────────────────────────────────────────────
 // Runs once per window, started on the first session:send.
 // Streams deltas to the renderer; fires session:done after each assistant turn.
@@ -150,11 +174,21 @@ async function runQueryLoop(
         ) {
           win.webContents.send('session:delta', streamEvent.delta.text)
         }
+      } else if (msg.type === 'rate_limit_event') {
+        applyRateLimitEvent(session, msg.rate_limit_info)
+        win.webContents.send('session:usage', session.usage)
       } else if (msg.type === 'result') {
         // SDKResultMessage is the canonical end-of-turn marker in
         // streaming-input mode — it arrives after all stream_event deltas
         // for a turn. (The 'assistant' SDK message arrives before the
         // deltas, not after, so it can't be used to mark turn end.)
+        try {
+          const ctx = await q.getContextUsage()
+          session.usage.ctxPct = Math.round(ctx.percentage)
+          win.webContents.send('session:usage', session.usage)
+        } catch (err) {
+          console.warn('[session] getContextUsage failed:', err)
+        }
         if (session.activeQuery) {
           session.activeQuery = false
           win.webContents.send('session:done')
@@ -300,6 +334,7 @@ async function createWindow(): Promise<void> {
     cwd: defaultCwd(),
     model: userSettings.model,
     effort: userSettings.effort,
+    usage: {},
   })
 
   win.on('closed', () => {

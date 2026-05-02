@@ -43,7 +43,7 @@ After every commit the app should run and the new behavior should be exercisable
 
 - [x] **18. Status bar config mode.** Show `cwd | model | effort` with `[change]` affordances. `cwd` → native folder picker; `model` / `effort` → dropdowns. Defaults from `$PWD`/`$HOME` and `~/.claude/settings.json`.
 - [x] **18a. Claude-style activity spinner in response pane.** While a query is active, show an animated spinner (matching Claude's dot/ellipsis pulse style) at the bottom of the response pane. Spinner disappears on `session:done`. Covers the gap between send and first token.
-- [ ] **19. Transition to monitoring mode on first send.** Pickers freeze read-only. Add `Ctx N% • 5h N% • 7d N%` from `SDKResultMessage`; threshold colors (green/amber/red).
+- [x] **19. Transition to monitoring mode on first send.** Pickers freeze read-only. Add `Ctx N% • 5h N% • 7d N%` from `SDKResultMessage`; threshold colors (green/amber/red).
 - [ ] **20. Cost estimate field.** Hardcoded per-model price table → `~$X.XX`. Hidden under Pro/Max subscription auth (detect via SDK auth mode).
 
 ## Phase 7 — Right-side status pane
@@ -61,34 +61,38 @@ After every commit the app should run and the new behavior should be exercisable
 
 ## Phase 9 — Slash commands
 
-- [ ] **28. App-intercepted allowlist: `/clear`, `/help`, `/cost`.** `/clear` rebuilds session in same window (preserves `cwd`, defaults `model`/`effort`). `/help` overlay with keybindings. `/cost` scrolls right pane to usage. Everything else passes through to SDK unchanged.
+- [ ] **28. App-intercepted allowlist: `/clear`, `/help`, `/cost`. `/insights`** `/clear` rebuilds session in same window (preserves `cwd`, defaults `model`/`effort`). `/help` overlay with keybindings. `/cost` scrolls right pane to usage. Everything else passes through to SDK unchanged.
 - [ ] **29. `/model [name]` and `/model`.** Mid-session via `setModel()`; bare form lists models in right pane.
 - [ ] **30. `/effort [level]` with lifecycle guard.** Only valid before first prompt; otherwise error message pointing to `/clear`. Verify `/effort high` → `/clear` → next `query()` carries `effort: 'high'` (one of the design's known-unknowns).
 
-## Phase 10 — Attachments
+## Phase 10 - Building
 
-- [ ] **31. File drag-and-drop → Markdown link insert.** `[foo.ts](/abs/path)`.
-- [ ] **32. Image paste → chip → image content block.** Placeholder chip in editor; on Send becomes an Anthropic `image` block; rendered into the transcript.
-- [ ] **33. Reject oversized / over-count.** >5MB or >100 images → explicit error before Send; prompt not cleared.
+- [ ] **31. Application build.** Ensure the application can be built on MacOS.
+- [ ] **32. Shell shortcut.** Provide a small shell script that will launch the Electron application and set the `%CWD` variable to the directory the application was launched from.
 
-## Phase 11 — Errors + compaction
+## Phase 12 — Attachments
 
-- [ ] **34. Tool errors render as red chip + red right-pane card.** Permission denials show `denied` status (not error styling).
-- [ ] **35. Blocking error banner with `[Retry] [Dismiss]`.** Network/4xx/5xx/rate-limit/SDK crash. Quota errors get a live countdown.
-- [ ] **36. Config error banner with `[Reload settings]`.** Hook failures, malformed settings.
-- [ ] **37. Compaction marker.** On `SDKCompactBoundaryMessage`: thin divider in transcript with `[show summary]` toggle; mirrored card in right pane; usage display reflects post-compact state.
+- [ ] **33. File drag-and-drop → Markdown link insert.** `[foo.ts](/abs/path)`.
+- [ ] **34. Image paste → chip → image content block.** Placeholder chip in editor; on Send becomes an Anthropic `image` block; rendered into the transcript.
+- [ ] **35. Reject oversized / over-count.** >5MB or >100 images → explicit error before Send; prompt not cleared.
 
-## Phase 12 — Multi-window + MCP polish
+## Phase 13 — Errors + compaction
 
-- [ ] **38. `Cmd+N` new window in config mode; `Cmd+W` interrupts + cleans up.** macOS Window menu lists windows; app survives last-window-close.
-- [ ] **39. MCP auth via `shell.openExternal`.** When an MCP auth tool emits a "visit this URL" message, open in user's real browser.
-- [ ] **40. Optional `statusLine` shell-out.** Opt-in via app config; appended to right of status bar.
+- [ ] **36. Tool errors render as red chip + red right-pane card.** Permission denials show `denied` status (not error styling).
+- [ ] **37. Blocking error banner with `[Retry] [Dismiss]`.** Network/4xx/5xx/rate-limit/SDK crash. Quota errors get a live countdown.
+- [ ] **38. Config error banner with `[Reload settings]`.** Hook failures, malformed settings.
+- [ ] **39. Compaction marker.** On `SDKCompactBoundaryMessage`: thin divider in transcript with `[show summary]` toggle; mirrored card in right pane; usage display reflects post-compact state.
 
-## Phase 13 — Smoke tests for the known unknowns (optional)
+## Phase 14 — Multi-window + MCP polish
 
-- [ ] **41. Verify user-level `CLAUDE.md` loads** with `settingSources: ['user','project','local']`.
-- [ ] **42. Force a mid-stream compaction** to confirm divider rendering doesn't corrupt a partial assistant message; fix if needed.
+- [ ] **40. `Cmd+N` new window in config mode; `Cmd+W` interrupts + cleans up.** macOS Window menu lists windows; app survives last-window-close.
+- [ ] **41. MCP auth via `shell.openExternal`.** When an MCP auth tool emits a "visit this URL" message, open in user's real browser.
+- [ ] **42. Optional `statusLine` shell-out.** Opt-in via app config; appended to right of status bar.
 
+## Phase 15 — Smoke tests for the known unknowns (optional)
+
+- [ ] **43. Verify user-level `CLAUDE.md` loads** with `settingSources: ['user','project','local']`.
+- [ ] **44. Force a mid-stream compaction** to confirm divider rendering doesn't corrupt a partial assistant message; fix if needed.
 ---
 
 ## Ordering notes

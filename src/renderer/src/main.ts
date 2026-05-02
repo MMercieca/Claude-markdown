@@ -13,7 +13,7 @@ const responsePane = document.getElementById('response-pane') as HTMLElement
 const responseContent = document.getElementById('response-content') as HTMLElement
 const statusBar = document.getElementById('status-bar') as HTMLElement
 const responseView = new ResponseView(responseContent)
-void mountStatusBar(statusBar)
+const statusBarReady = mountStatusBar(statusBar)
 const promptPane = document.getElementById('prompt-pane') as HTMLElement
 const promptEditorEl = document.getElementById('prompt-editor') as HTMLElement
 const colDivider = document.getElementById('col-divider') as HTMLElement
@@ -133,6 +133,7 @@ const editor = new EditorView({
           agentActive = true
           responseView.addUserTurn(text)
           responseView.startAssistantTurn()
+          void statusBarReady.then((sb) => sb.freeze())
           void window.api.session.send(text)
           return true
         },

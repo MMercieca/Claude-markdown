@@ -44,7 +44,14 @@ export interface RendererToMain {
   'config:setEffort'(effort: EffortLevel): void
 }
 
+export interface UsageState {
+  ctxPct?: number       // 0-100, context window utilization
+  fiveHourPct?: number  // 0-100, 5-hour rate limit
+  sevenDayPct?: number  // 0-100, 7-day rate limit (worst of opus/sonnet/global)
+}
+
 export interface MainToRenderer {
   'session:delta': string  // partial text delta while streaming
   'session:done': void     // query completed
+  'session:usage': UsageState  // partial usage update; merge with prior state
 }
