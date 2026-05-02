@@ -150,8 +150,11 @@ async function runQueryLoop(
         ) {
           win.webContents.send('session:delta', streamEvent.delta.text)
         }
-      } else if (msg.type === 'assistant' && msg.parent_tool_use_id === null) {
-        // Guard against race with interrupt handler — only send once.
+      } else if (msg.type === 'result') {
+        // SDKResultMessage is the canonical end-of-turn marker in
+        // streaming-input mode — it arrives after all stream_event deltas
+        // for a turn. (The 'assistant' SDK message arrives before the
+        // deltas, not after, so it can't be used to mark turn end.)
         if (session.activeQuery) {
           session.activeQuery = false
           win.webContents.send('session:done')

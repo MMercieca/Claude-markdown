@@ -93,6 +93,13 @@ function Transcript({ turns, streaming }: Props): React.JSX.Element {
           </ReactMarkdown>
         </div>
       )}
+      {streaming === '' && (
+        <div className="activity-spinner" aria-label="Working">
+          <span className="dot" />
+          <span className="dot" />
+          <span className="dot" />
+        </div>
+      )}
       <div ref={endRef} />
     </>
   )
