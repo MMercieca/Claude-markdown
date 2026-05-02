@@ -72,13 +72,35 @@ html, body {
   margin-bottom: 16px;
 }
 
-#response-content .turn-user .user-text {
-  white-space: pre-wrap;
-  font-family: inherit;
-  padding: 8px 12px;
-  border-left: 3px solid var(--divider-active);
-  opacity: 0.85;
+#response-content .turn-user {
+  display: flex;
+  justify-content: flex-end;
 }
+
+#response-content .turn-user .user-text {
+  word-break: break-word;
+  padding: 8px 12px;
+  border-radius: 14px;
+  background: var(--bubble-bg);
+  color: var(--bubble-fg);
+  max-width: 75%;
+}
+
+/* Tighten the first/last child margins so the bubble hugs the content. */
+#response-content .turn-user .user-text > :first-child { margin-top: 0; }
+#response-content .turn-user .user-text > :last-child  { margin-bottom: 0; }
+
+/* Markdown elements that need contrast tweaks inside the blue bubble. */
+#response-content .turn-user a { color: inherit; text-decoration: underline; }
+#response-content .turn-user :not(pre) > code {
+  background: rgba(255, 255, 255, 0.2);
+  color: inherit;
+}
+#response-content .turn-user pre { background: rgba(0, 0, 0, 0.25); }
+#response-content .turn-user pre code { color: var(--bubble-fg); }
+#response-content .turn-user blockquote { border-left-color: rgba(255, 255, 255, 0.4); }
+#response-content .turn-user th,
+#response-content .turn-user td { border-color: rgba(255, 255, 255, 0.4); }
 
 #response-content .streaming-text {
   white-space: pre-wrap;
@@ -189,6 +211,8 @@ html, body {
   --fg: #1a1a1a;
   --divider: #e0e0e0;
   --divider-active: #0066cc;
+  --bubble-bg: #007aff;
+  --bubble-fg: #ffffff;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -197,5 +221,7 @@ html, body {
     --fg: #d4d4d4;
     --divider: #3a3a3a;
     --divider-active: #4d9fff;
+    --bubble-bg: #0a84ff;
+    --bubble-fg: #ffffff;
   }
 }

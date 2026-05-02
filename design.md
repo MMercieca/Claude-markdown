@@ -121,6 +121,12 @@ CodeMirror 6 with `@codemirror/lang-markdown`.
 
 Scrolling transcript of the full session, rendered as Markdown.
 
+### Turn layout
+
+- **User turns**: right-aligned chat bubble, Markdown-rendered (so the bubble matches what was visible in the prompt editor at Send time). Same renderer as assistant turns; styling differs only via the bubble container.
+- **Assistant turns**: full-width, Markdown-rendered, no bubble. The transcript reads top-to-bottom like a chat: bubble, response, bubble, response.
+- Sent prompts are never cleared from the transcript on Send (the prompt pane is cleared, but the bubble persists in the response pane above).
+
 ### Streaming
 
 - **Render partial Markdown immediately** as text streams in. Inline styles (`**`, `*`, `` ` ``) snap into place when delimiters close — fast enough not to matter.

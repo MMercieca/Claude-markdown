@@ -25,7 +25,14 @@ function Transcript({ turns, streaming }: Props): React.JSX.Element {
       {turns.map((turn, i) => (
         <div key={i} className={`turn turn-${turn.role}`}>
           {turn.role === 'user' ? (
-            <pre className="user-text">{turn.text}</pre>
+            <div className="user-text">
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                rehypePlugins={[rehypeHighlight]}
+              >
+                {turn.text}
+              </ReactMarkdown>
+            </div>
           ) : (
             <>
               <ReactMarkdown
@@ -41,7 +48,12 @@ function Transcript({ turns, streaming }: Props): React.JSX.Element {
       ))}
       {streaming !== null && (
         <div className="turn turn-assistant streaming">
-          <pre className="streaming-text">{streaming}</pre>
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            rehypePlugins={[rehypeHighlight]}
+          >
+            {streaming}
+          </ReactMarkdown>
         </div>
       )}
       <div ref={endRef} />
