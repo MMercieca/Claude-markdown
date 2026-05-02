@@ -143,14 +143,11 @@ html, body {
   .sb-usage-red   { color: #f85149; }
 }
 
-.sb-sign-in {
-  opacity: 0.7;
-  font-size: 11px;
-}
+.sb-auth-signing { opacity: 0.6; }
+.sb-auth-error   { color: #cf222e; }
 
-.sb-sign-in:disabled {
-  cursor: default;
-  opacity: 0.4;
+@media (prefers-color-scheme: dark) {
+  .sb-auth-error { color: #f85149; }
 }
 
 .sb-dropdown {
@@ -179,6 +176,7 @@ html, body {
 
 .sb-dropdown-item:hover { background: var(--divider); }
 .sb-dropdown-item.selected { font-weight: 600; }
+.sb-dropdown-item.disabled { opacity: 0.4; cursor: default; }
 
 #response-pane {
   flex: 60;

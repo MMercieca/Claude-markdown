@@ -8,6 +8,7 @@ import type { SDKUserMessage, SDKRateLimitInfo, Query } from '@anthropic-ai/clau
 import type {
   LayoutState,
   EffortLevel,
+  AuthMode,
   ModelOption,
   ConfigBootstrap,
   UsageState,
@@ -64,6 +65,7 @@ interface SessionState {
   cwd: string
   model: string
   effort: EffortLevel
+  authMode: AuthMode
   usage: UsageState                 // last-known usage; rate-limit fields persist across turns
 }
 
@@ -92,6 +94,16 @@ function defaultCwd(): string {
   const pwd = process.env['PWD']
   if (pwd && pwd !== '/' && process.env['TERM']) return pwd
   return homedir()
+}
+
+function bedrockAvailable(): boolean {
+  return process.env['CLAUDE_CODE_USE_BEDROCK'] === '1'
+}
+
+function defaultAuthMode(): AuthMode {
+  if (bedrockAvailable()) return 'bedrock'
+  if (process.env['ANTHROPIC_API_KEY']) return 'api-key'
+  return 'claude-ai'
 }
 
 function isEffort(v: unknown): v is EffortLevel {
@@ -362,6 +374,8 @@ ipcMain.handle('config:get', (event): ConfigBootstrap | null => {
     effort: session.effort,
     models: AVAILABLE_MODELS,
     effortLevels: EFFORT_LEVELS,
+    authMode: session.authMode,
+    bedrockAvailable: bedrockAvailable(),
   }
 })
 
@@ -392,6 +406,12 @@ ipcMain.handle('config:setEffort', (event, effort: EffortLevel): void => {
   session.effort = effort
 })
 
+ipcMain.handle('config:setAuthMode', (event, mode: AuthMode): void => {
+  const session = sessions.get(event.sender.id)
+  if (!session) return
+  session.authMode = mode
+})
+
 // ── Window factory ──────────────────────────────────────────────────────────
 
 async function createWindow(): Promise<void> {
@@ -419,6 +439,7 @@ async function createWindow(): Promise<void> {
     cwd: defaultCwd(),
     model: userSettings.model,
     effort: userSettings.effort,
+    authMode: defaultAuthMode(),
     usage: {},
   })
 

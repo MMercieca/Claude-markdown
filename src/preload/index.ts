@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { LayoutState, ConfigBootstrap, EffortLevel, UsageState, AuthInfo, SignInStatus } from '../shared/ipc'
+import type { LayoutState, ConfigBootstrap, EffortLevel, AuthMode, UsageState, AuthInfo, SignInStatus } from '../shared/ipc'
 
 // Ergonomic nested API exposed to the renderer. Each method wraps
 // ipcRenderer.invoke so the renderer never sees ipcRenderer directly.
@@ -24,6 +24,8 @@ const api = {
       ipcRenderer.invoke('config:setModel', model) as Promise<void>,
     setEffort: (effort: EffortLevel): Promise<void> =>
       ipcRenderer.invoke('config:setEffort', effort) as Promise<void>,
+    setAuthMode: (mode: AuthMode): Promise<void> =>
+      ipcRenderer.invoke('config:setAuthMode', mode) as Promise<void>,
   },
 
   session: {
@@ -71,4 +73,4 @@ const api = {
 contextBridge.exposeInMainWorld('api', api)
 
 export type Api = typeof api
-export type { LayoutState, ConfigBootstrap, EffortLevel, UsageState, AuthInfo, SignInStatus }
+export type { LayoutState, ConfigBootstrap, EffortLevel, AuthMode, UsageState, AuthInfo, SignInStatus }

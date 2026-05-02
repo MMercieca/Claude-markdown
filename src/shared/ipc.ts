@@ -16,6 +16,8 @@ export interface LayoutState {
 
 export type EffortLevel = 'low' | 'medium' | 'high' | 'xhigh' | 'max'
 
+export type AuthMode = 'api-key' | 'claude-ai' | 'bedrock'
+
 export interface ModelOption {
   id: string
   label: string
@@ -30,6 +32,8 @@ export interface SessionConfig {
 export interface ConfigBootstrap extends SessionConfig {
   models: ModelOption[]
   effortLevels: EffortLevel[]
+  authMode: AuthMode
+  bedrockAvailable: boolean
 }
 
 export interface RendererToMain {
@@ -43,6 +47,7 @@ export interface RendererToMain {
   'config:pickCwd'(): string | null
   'config:setModel'(model: string): void
   'config:setEffort'(effort: EffortLevel): void
+  'config:setAuthMode'(mode: AuthMode): void
 }
 
 export type RateLimitStatus = 'allowed' | 'allowed_warning' | 'rejected'

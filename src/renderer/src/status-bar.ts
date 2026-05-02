@@ -1,4 +1,4 @@
-import type { ConfigBootstrap, EffortLevel, ModelOption, UsageState, AuthInfo, RateLimitStatus, SignInStatus } from '../../shared/ipc'
+import type { ConfigBootstrap, EffortLevel, AuthMode, ModelOption, UsageState, AuthInfo, RateLimitStatus, SignInStatus } from '../../shared/ipc'
 
 export interface StatusBarHandle {
   /** Switch to monitoring mode: pickers freeze, usage chips appear. Idempotent. */
@@ -38,48 +38,50 @@ export async function mountStatusBar(container: HTMLElement): Promise<StatusBarH
   container.innerHTML = ''
   container.classList.add('status-bar-config')
 
-  const cwdItem  = document.createElement('button')
-  const sep1     = document.createElement('span')
+  const cwdItem   = document.createElement('button')
+  const sep1      = document.createElement('span')
   const modelItem = document.createElement('button')
-  const sep2     = document.createElement('span')
+  const sep2      = document.createElement('span')
   const effortItem = document.createElement('button')
-  const sep3SignIn = document.createElement('span')
-  const signInItem = document.createElement('button')
+  const sep3      = document.createElement('span')
+  const authItem  = document.createElement('button')
   // Usage chip container — appended only after freeze().
   const usageWrap = document.createElement('span')
   usageWrap.className = 'sb-usage'
 
-  for (const sep of [sep1, sep2, sep3SignIn]) {
+  for (const sep of [sep1, sep2, sep3]) {
     sep.className = 'sb-sep'
     sep.textContent = '|'
   }
 
-  cwdItem.className = 'sb-item'
+  cwdItem.className   = 'sb-item'
   modelItem.className = 'sb-item'
   effortItem.className = 'sb-item'
-  signInItem.className = 'sb-item sb-sign-in'
+  authItem.className  = 'sb-item'
 
   function paint(): void {
     const changeAffordance = frozen ? '' : '<span class="sb-change">[change]</span>'
     cwdItem.innerHTML    = `<span class="sb-value">${escapeHtml(shortenCwd(current.cwd))}</span>${changeAffordance}`
     modelItem.innerHTML  = `<span class="sb-value">${escapeHtml(modelLabel(current.model, current.models))}</span>${changeAffordance}`
     effortItem.innerHTML = `<span class="sb-value">${escapeHtml(current.effort)}</span>${changeAffordance}`
-    if (!frozen) paintSignIn()
+    if (!frozen) paintAuth()
     if (frozen) paintUsage()
   }
 
-  function paintSignIn(): void {
+  function paintAuth(): void {
     if (signInStatus.inProgress) {
-      signInItem.textContent = 'Signing in…'
-      signInItem.disabled = true
+      authItem.innerHTML = `<span class="sb-value sb-auth-signing">${escapeHtml(current.authMode)} <span class="sb-change">Signing in…</span></span>`
+      authItem.disabled = true
+      authItem.title = ''
     } else if (signInStatus.error) {
-      signInItem.textContent = 'Sign in failed'
-      signInItem.title = signInStatus.error
-      signInItem.disabled = false
+      authItem.innerHTML = `<span class="sb-value sb-auth-error">${escapeHtml(current.authMode)}</span>`
+      authItem.disabled = false
+      authItem.title = signInStatus.error
     } else {
-      signInItem.textContent = 'Sign in with Claude'
-      signInItem.title = ''
-      signInItem.disabled = false
+      const changeAffordance = '<span class="sb-change">[change]</span>'
+      authItem.innerHTML = `<span class="sb-value">${escapeHtml(current.authMode)}</span>${changeAffordance}`
+      authItem.disabled = false
+      authItem.title = ''
     }
   }
 
@@ -94,7 +96,7 @@ export async function mountStatusBar(container: HTMLElement): Promise<StatusBarH
   }
 
   paint()
-  container.append(cwdItem, sep1, modelItem, sep2, effortItem, sep3SignIn, signInItem)
+  container.append(cwdItem, sep1, modelItem, sep2, effortItem, sep3, authItem)
 
   cwdItem.addEventListener('click', async () => {
     if (frozen) return
@@ -124,14 +126,37 @@ export async function mountStatusBar(container: HTMLElement): Promise<StatusBarH
     })
   })
 
-  signInItem.addEventListener('click', () => {
+  authItem.addEventListener('click', () => {
     if (frozen || signInStatus.inProgress) return
-    void window.api.session.signIn()
+    const authModes: Array<{ value: AuthMode; label: string; disabled?: boolean }> = [
+      { value: 'api-key',   label: 'api-key' },
+      { value: 'claude-ai', label: 'claude-ai' },
+      {
+        value: 'bedrock',
+        label: current.bedrockAvailable ? 'bedrock' : 'bedrock (env vars not set)',
+        disabled: !current.bedrockAvailable,
+      },
+    ]
+    openDropdown(
+      authItem,
+      authModes,
+      current.authMode,
+      async (value) => {
+        const mode = value as AuthMode
+        await window.api.config.setAuthMode(mode)
+        current = { ...current, authMode: mode }
+        if (mode === 'claude-ai') {
+          void window.api.session.signIn()
+        } else {
+          paintAuth()
+        }
+      },
+    )
   })
 
   window.api.session.onSignInStatus((s) => {
     signInStatus = s
-    if (!frozen) paintSignIn()
+    if (!frozen) paintAuth()
   })
 
   window.api.session.onUsage((u) => {
@@ -150,9 +175,9 @@ export async function mountStatusBar(container: HTMLElement): Promise<StatusBarH
       frozen = true
       container.classList.remove('status-bar-config')
       container.classList.add('status-bar-monitoring')
-      // Remove sign-in affordance; replace with usage chips.
-      sep3SignIn.remove()
-      signInItem.remove()
+      // Remove the auth picker; replace with usage chips.
+      sep3.remove()
+      authItem.remove()
       const sepUsage = document.createElement('span')
       sepUsage.className = 'sb-sep'
       sepUsage.textContent = '|'
@@ -198,6 +223,7 @@ function escapeHtml(s: string): string {
 interface DropdownOption {
   value: string
   label: string
+  disabled?: boolean
 }
 
 function openDropdown(
@@ -217,8 +243,13 @@ function openDropdown(
     item.className = 'sb-dropdown-item'
     item.textContent = opt.label
     if (opt.value === current) item.classList.add('selected')
+    if (opt.disabled) {
+      item.disabled = true
+      item.classList.add('disabled')
+    }
     item.addEventListener('click', (e) => {
       e.stopPropagation()
+      if (opt.disabled) return
       menu.remove()
       onPick(opt.value)
     })
