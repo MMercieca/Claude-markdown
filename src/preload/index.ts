@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { LayoutState } from '../shared/ipc'
+import type { LayoutState, ConfigBootstrap, EffortLevel } from '../shared/ipc'
 
 // Ergonomic nested API exposed to the renderer. Each method wraps
 // ipcRenderer.invoke so the renderer never sees ipcRenderer directly.
@@ -13,6 +13,17 @@ const api = {
       ipcRenderer.invoke('layout:load') as Promise<LayoutState | null>,
     save: (state: LayoutState): Promise<void> =>
       ipcRenderer.invoke('layout:save', state) as Promise<void>,
+  },
+
+  config: {
+    get: (): Promise<ConfigBootstrap | null> =>
+      ipcRenderer.invoke('config:get') as Promise<ConfigBootstrap | null>,
+    pickCwd: (): Promise<string | null> =>
+      ipcRenderer.invoke('config:pickCwd') as Promise<string | null>,
+    setModel: (model: string): Promise<void> =>
+      ipcRenderer.invoke('config:setModel', model) as Promise<void>,
+    setEffort: (effort: EffortLevel): Promise<void> =>
+      ipcRenderer.invoke('config:setEffort', effort) as Promise<void>,
   },
 
   session: {
@@ -39,4 +50,4 @@ const api = {
 contextBridge.exposeInMainWorld('api', api)
 
 export type Api = typeof api
-export type { LayoutState }
+export type { LayoutState, ConfigBootstrap, EffortLevel }

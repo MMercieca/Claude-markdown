@@ -14,12 +14,34 @@ export interface LayoutState {
   promptHeight: number
 }
 
+export type EffortLevel = 'low' | 'medium' | 'high' | 'xhigh' | 'max'
+
+export interface ModelOption {
+  id: string
+  label: string
+}
+
+export interface SessionConfig {
+  cwd: string
+  model: string
+  effort: EffortLevel
+}
+
+export interface ConfigBootstrap extends SessionConfig {
+  models: ModelOption[]
+  effortLevels: EffortLevel[]
+}
+
 export interface RendererToMain {
   ping(): 'pong'
   'layout:load'(): LayoutState | null
   'layout:save'(state: LayoutState): void
   'session:send'(text: string): void
   'session:interrupt'(): void
+  'config:get'(): ConfigBootstrap
+  'config:pickCwd'(): string | null
+  'config:setModel'(model: string): void
+  'config:setEffort'(effort: EffortLevel): void
 }
 
 export interface MainToRenderer {

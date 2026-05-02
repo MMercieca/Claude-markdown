@@ -6,11 +6,14 @@ import { syntaxHighlighting, HighlightStyle } from '@codemirror/language'
 import { tags } from '@lezer/highlight'
 import 'highlight.js/styles/github.css'
 import { ResponseView } from './response'
+import { mountStatusBar } from './status-bar'
 
 const leftCol = document.getElementById('left-col') as HTMLElement
 const responsePane = document.getElementById('response-pane') as HTMLElement
 const responseContent = document.getElementById('response-content') as HTMLElement
+const statusBar = document.getElementById('status-bar') as HTMLElement
 const responseView = new ResponseView(responseContent)
+void mountStatusBar(statusBar)
 const promptPane = document.getElementById('prompt-pane') as HTMLElement
 const promptEditorEl = document.getElementById('prompt-editor') as HTMLElement
 const colDivider = document.getElementById('col-divider') as HTMLElement

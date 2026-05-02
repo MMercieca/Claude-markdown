@@ -1,11 +1,16 @@
-import { app, BrowserWindow, ipcMain, nativeTheme } from 'electron'
+import { app, BrowserWindow, ipcMain, nativeTheme, dialog } from 'electron'
 import { readFile, writeFile, mkdir } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { homedir } from 'node:os'
 import { query } from '@anthropic-ai/claude-agent-sdk'
 import type { SDKUserMessage, Query } from '@anthropic-ai/claude-agent-sdk'
-import type { LayoutState } from '../shared/ipc'
+import type {
+  LayoutState,
+  EffortLevel,
+  ModelOption,
+  ConfigBootstrap,
+} from '../shared/ipc'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -53,10 +58,66 @@ interface SessionState {
   activeQuery: boolean              // true while the agent is generating a response
   promptChannel: PromptChannel | null  // null until first send
   activeQueryObj: Query | null      // live Query for interrupt; null when idle
-  // settings (cwd, model, effort) added in step 18
+  cwd: string
+  model: string
+  effort: EffortLevel
 }
 
 const sessions = new Map<number, SessionState>()
+
+// ── Defaults ────────────────────────────────────────────────────────────────
+// cwd: $PWD if launched from a terminal, else $HOME.
+// model/effort: read from ~/.claude/settings.json once at startup; SDK
+// defaults if absent or malformed.
+
+const AVAILABLE_MODELS: ModelOption[] = [
+  { id: 'claude-opus-4-7',          label: 'Opus 4.7' },
+  { id: 'claude-sonnet-4-6',        label: 'Sonnet 4.6' },
+  { id: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5' },
+]
+
+const EFFORT_LEVELS: EffortLevel[] = ['low', 'medium', 'high', 'xhigh', 'max']
+
+const SDK_DEFAULT_MODEL = 'claude-opus-4-7'
+const SDK_DEFAULT_EFFORT: EffortLevel = 'high'
+
+function defaultCwd(): string {
+  const pwd = process.env['PWD']
+  if (pwd && pwd !== '/' && pwd !== app.getAppPath()) return pwd
+  return homedir()
+}
+
+function isEffort(v: unknown): v is EffortLevel {
+  return typeof v === 'string' && (EFFORT_LEVELS as string[]).includes(v)
+}
+
+interface UserSettings {
+  model: string
+  effort: EffortLevel
+}
+
+async function readUserSettings(): Promise<UserSettings> {
+  try {
+    const raw = await readFile(join(homedir(), '.claude', 'settings.json'), 'utf-8')
+    const parsed: unknown = JSON.parse(raw)
+    if (parsed === null || typeof parsed !== 'object') {
+      return { model: SDK_DEFAULT_MODEL, effort: SDK_DEFAULT_EFFORT }
+    }
+    const obj = parsed as Record<string, unknown>
+    return {
+      model: typeof obj['model'] === 'string' ? obj['model'] : SDK_DEFAULT_MODEL,
+      effort: isEffort(obj['effort']) ? obj['effort'] : SDK_DEFAULT_EFFORT,
+    }
+  } catch {
+    return { model: SDK_DEFAULT_MODEL, effort: SDK_DEFAULT_EFFORT }
+  }
+}
+
+let cachedUserSettings: UserSettings | null = null
+async function getUserSettings(): Promise<UserSettings> {
+  cachedUserSettings ??= await readUserSettings()
+  return cachedUserSettings
+}
 
 // ── Persistent query loop ───────────────────────────────────────────────────
 // Runs once per window, started on the first session:send.
@@ -67,7 +128,15 @@ async function runQueryLoop(
   win: BrowserWindow,
   channel: PromptChannel,
 ): Promise<void> {
-  const q = query({ prompt: channel, options: { includePartialMessages: true } })
+  const q = query({
+    prompt: channel,
+    options: {
+      includePartialMessages: true,
+      cwd: session.cwd,
+      model: session.model,
+      effort: session.effort,
+    },
+  })
   session.activeQueryObj = q
   try {
     for await (const msg of q) {
@@ -160,9 +229,51 @@ ipcMain.handle('layout:save', async (_event, state: LayoutState): Promise<void> 
   await writeFile(layoutPath, JSON.stringify(state), 'utf-8')
 })
 
+// ── Config IPC handlers ─────────────────────────────────────────────────────
+
+ipcMain.handle('config:get', (event): ConfigBootstrap | null => {
+  const session = sessions.get(event.sender.id)
+  if (!session) return null
+  return {
+    cwd: session.cwd,
+    model: session.model,
+    effort: session.effort,
+    models: AVAILABLE_MODELS,
+    effortLevels: EFFORT_LEVELS,
+  }
+})
+
+ipcMain.handle('config:pickCwd', async (event): Promise<string | null> => {
+  const session = sessions.get(event.sender.id)
+  if (!session) return null
+  const win = BrowserWindow.fromWebContents(event.sender)
+  if (!win) return null
+  const result = await dialog.showOpenDialog(win, {
+    properties: ['openDirectory'],
+    defaultPath: session.cwd,
+  })
+  if (result.canceled || result.filePaths.length === 0) return null
+  const chosen = result.filePaths[0]!
+  session.cwd = chosen
+  return chosen
+})
+
+ipcMain.handle('config:setModel', (event, model: string): void => {
+  const session = sessions.get(event.sender.id)
+  if (!session) return
+  session.model = model
+})
+
+ipcMain.handle('config:setEffort', (event, effort: EffortLevel): void => {
+  const session = sessions.get(event.sender.id)
+  if (!session) return
+  session.effort = effort
+})
+
 // ── Window factory ──────────────────────────────────────────────────────────
 
-function createWindow(): void {
+async function createWindow(): Promise<void> {
+  const userSettings = await getUserSettings()
   const win = new BrowserWindow({
     width: 1200,
     height: 800,
@@ -178,7 +289,15 @@ function createWindow(): void {
   })
 
   const sessionId = win.webContents.id
-  sessions.set(sessionId, { windowId: sessionId, activeQuery: false, promptChannel: null, activeQueryObj: null })
+  sessions.set(sessionId, {
+    windowId: sessionId,
+    activeQuery: false,
+    promptChannel: null,
+    activeQueryObj: null,
+    cwd: defaultCwd(),
+    model: userSettings.model,
+    effort: userSettings.effort,
+  })
 
   win.on('closed', () => {
     sessions.get(sessionId)?.promptChannel?.close()
@@ -199,10 +318,10 @@ function createWindow(): void {
 // ── App lifecycle ───────────────────────────────────────────────────────────
 
 void app.whenReady().then(() => {
-  createWindow()
+  void createWindow()
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
+    if (BrowserWindow.getAllWindows().length === 0) void createWindow()
   })
 })
 

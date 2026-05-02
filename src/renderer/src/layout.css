@@ -54,7 +54,69 @@ html, body {
   align-items: center;
   padding: 0 12px;
   border-bottom: 1px solid var(--divider);
+  font-size: 12px;
+  gap: 8px;
+  overflow: hidden;
 }
+
+.status-bar-config .sb-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  background: transparent;
+  border: 0;
+  font: inherit;
+  color: inherit;
+  padding: 2px 4px;
+  cursor: pointer;
+  border-radius: 3px;
+  max-width: 50%;
+}
+
+.status-bar-config .sb-item:hover { background: var(--divider); }
+
+.status-bar-config .sb-value {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.status-bar-config .sb-change {
+  opacity: 0.55;
+  font-size: 11px;
+}
+
+.status-bar-config .sb-sep {
+  opacity: 0.35;
+  user-select: none;
+}
+
+.sb-dropdown {
+  position: fixed;
+  z-index: 100;
+  background: var(--bg);
+  border: 1px solid var(--divider);
+  border-radius: 6px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+  padding: 4px 0;
+  min-width: 160px;
+  font-size: 12px;
+}
+
+.sb-dropdown-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  padding: 6px 12px;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.sb-dropdown-item:hover { background: var(--divider); }
+.sb-dropdown-item.selected { font-weight: 600; }
 
 #response-pane {
   flex: 60;
