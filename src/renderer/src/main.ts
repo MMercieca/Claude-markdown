@@ -7,11 +7,13 @@ import { tags } from '@lezer/highlight'
 import 'highlight.js/styles/github.css'
 import { ResponseView } from './response'
 import { mountStatusBar } from './status-bar'
+import { mountRightPane } from './right-pane'
 
 const leftCol = document.getElementById('left-col') as HTMLElement
 const responsePane = document.getElementById('response-pane') as HTMLElement
 const responseContent = document.getElementById('response-content') as HTMLElement
 const statusBar = document.getElementById('status-bar') as HTMLElement
+const rightHeader = document.getElementById('right-header') as HTMLElement
 const responseView = new ResponseView(responseContent)
 const statusBarReady = mountStatusBar(statusBar)
 const promptPane = document.getElementById('prompt-pane') as HTMLElement
@@ -112,9 +114,14 @@ const markdownColors = HighlightStyle.define([
 
 const editableCompartment = new Compartment()
 
-// Tracks whether the agent is currently generating. Read by both the Escape
-// keymap and the onDone handler; written by the Mod-Enter keymap and onDone.
+// Tracks whether the agent is currently generating.
 let agentActive = false
+
+const rightPane = mountRightPane(rightHeader, () => {
+  responseView.markInterrupted()
+  agentActive = false
+  void window.api.session.interrupt()
+})
 
 function setEditorEditable(editable: boolean): void {
   editor.dispatch({ effects: editableCompartment.reconfigure(EditorView.editable.of(editable)) })
@@ -131,6 +138,7 @@ const editor = new EditorView({
           view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: '' } })
           view.dispatch({ effects: editableCompartment.reconfigure(EditorView.editable.of(false)) })
           agentActive = true
+          rightPane.setActive()
           responseView.addUserTurn(text)
           responseView.startAssistantTurn()
           void statusBarReady.then((sb) => sb.freeze())
@@ -166,6 +174,7 @@ window.api.session.onDelta((delta) => {
 
 window.api.session.onDone(() => {
   responseView.finishAssistantTurn()
+  rightPane.setIdle()
   agentActive = false
   setEditorEditable(true)
   editor.focus()
@@ -187,6 +196,7 @@ document.addEventListener('keydown', (e: KeyboardEvent) => {
   if (e.key === 'Escape' && agentActive) {
     e.preventDefault()
     responseView.markInterrupted()
+    rightPane.setIdle()
     agentActive = false
     void window.api.session.interrupt()
   }

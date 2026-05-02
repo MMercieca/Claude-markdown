@@ -64,7 +64,7 @@ Adds support for **claude.ai OAuth** (Pro/Max subscription, used at home) and **
 
 ## Phase 8 — Right-side status pane
 
-- [ ] **26. Sticky header: idle vs active.** Active: current activity string + `[Interrupt]`. Idle: last-turn tokens, model, latency.
+- [x] **26. Sticky header: idle vs active.** Active: current activity string + `[Interrupt]`. Idle: last-turn tokens, model, latency.
 - [ ] **27. Structured event log.** Per-tool card: name, expandable input args, expandable output. `--- Turn N ---` separators.
 - [ ] **28. Tool chips in response pane (no inline output).** `⚙ Read foo.ts ✓` etc.; click → scroll/expand the matching right-pane card.
 - [ ] **29. `Structured | Raw JSON` toggle.** Raw view pretty-prints every SDK event in fenced JSON blocks.

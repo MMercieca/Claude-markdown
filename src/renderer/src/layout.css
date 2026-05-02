@@ -41,8 +41,66 @@ html, body {
   overflow: hidden;
   border-left: none; /* col-divider is the visual separator */
   display: flex;
+  flex-direction: column;
+}
+
+#right-header {
+  flex: none;
+  min-height: 36px;
+  display: flex;
   align-items: center;
-  justify-content: center;
+  padding: 0 12px;
+  gap: 8px;
+  border-bottom: 1px solid var(--divider);
+  font-size: 12px;
+}
+
+#right-log {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.right-header-active { /* active state — no additional styles needed beyond base */ }
+
+.rh-activity {
+  flex: 1;
+  opacity: 0.75;
+  font-style: italic;
+}
+
+.rh-interrupt {
+  flex-shrink: 0;
+  background: transparent;
+  border: 1px solid var(--divider);
+  border-radius: 4px;
+  padding: 2px 8px;
+  font: inherit;
+  font-size: 11px;
+  color: inherit;
+  cursor: pointer;
+}
+
+.rh-interrupt:hover { background: var(--divider); }
+
+.right-header-idle { color: inherit; }
+
+.rh-stats {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.rh-label  { opacity: 0.5; }
+.rh-val    { font-weight: 500; }
+.rh-sep    { opacity: 0.3; }
+.rh-model  { opacity: 0.55; }
+
+.rh-placeholder {
+  font-size: 11px;
+  opacity: 0.35;
+  font-style: italic;
 }
 
 /* ── Left column: status-bar | response-pane | row-divider | prompt-pane ── */

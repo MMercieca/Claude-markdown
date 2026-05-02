@@ -81,6 +81,15 @@ export interface AuthError {
   message: string
 }
 
+export interface TurnStats {
+  inputTokens: number
+  outputTokens: number
+  /** wall-clock turn duration in milliseconds */
+  durationMs: number
+  /** model that serviced the turn */
+  model: string
+}
+
 export interface MainToRenderer {
   'session:delta': string  // partial text delta while streaming
   'session:done': void     // query completed
@@ -88,6 +97,7 @@ export interface MainToRenderer {
   'session:auth': AuthInfo    // one-time auth mode signal after accountInfo() resolves
   'session:signInStatus': SignInStatus  // progress/result of claude.ai OAuth sign-in
   'session:authError': AuthError | null  // null = dismiss the banner
+  'session:turnStats': TurnStats        // emitted with each result message
 }
 
 export interface RendererToSystem {

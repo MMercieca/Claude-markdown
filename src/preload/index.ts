@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { LayoutState, ConfigBootstrap, EffortLevel, AuthMode, UsageState, AuthInfo, SignInStatus, AuthError } from '../shared/ipc'
+import type { LayoutState, ConfigBootstrap, EffortLevel, AuthMode, UsageState, AuthInfo, SignInStatus, AuthError, TurnStats } from '../shared/ipc'
 
 // Ergonomic nested API exposed to the renderer. Each method wraps
 // ipcRenderer.invoke so the renderer never sees ipcRenderer directly.
@@ -73,6 +73,12 @@ const api = {
       ipcRenderer.on('session:authError', listener)
       return () => ipcRenderer.removeListener('session:authError', listener)
     },
+
+    onTurnStats: (cb: (stats: TurnStats) => void): (() => void) => {
+      const listener = (_e: Electron.IpcRendererEvent, stats: TurnStats) => cb(stats)
+      ipcRenderer.on('session:turnStats', listener)
+      return () => ipcRenderer.removeListener('session:turnStats', listener)
+    },
   },
 
   system: {
@@ -84,4 +90,4 @@ const api = {
 contextBridge.exposeInMainWorld('api', api)
 
 export type Api = typeof api
-export type { LayoutState, ConfigBootstrap, EffortLevel, AuthMode, UsageState, AuthInfo, SignInStatus, AuthError }
+export type { LayoutState, ConfigBootstrap, EffortLevel, AuthMode, UsageState, AuthInfo, SignInStatus, AuthError, TurnStats }

@@ -15,6 +15,7 @@ import type {
   AuthInfo,
   SignInStatus,
   AuthError,
+  TurnStats,
 } from '../shared/ipc'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -248,6 +249,13 @@ async function runQueryLoop(
           console.warn('[session] getContextUsage failed:', err)
         }
         win.webContents.send('session:usage', session.usage)
+        const turnStats: TurnStats = {
+          inputTokens: msg.usage.input_tokens,
+          outputTokens: msg.usage.output_tokens,
+          durationMs: msg.duration_ms,
+          model: session.model,
+        }
+        win.webContents.send('session:turnStats', turnStats)
         if (session.activeQuery) {
           session.activeQuery = false
           win.webContents.send('session:done')
