@@ -1,8 +1,33 @@
 import { createRoot, type Root } from 'react-dom/client'
-import { useEffect, useRef } from 'react'
-import ReactMarkdown from 'react-markdown'
+import { useEffect, useRef, useState, type ComponentPropsWithoutRef } from 'react'
+import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeHighlight from 'rehype-highlight'
+
+function CodeBlock({ children, ...props }: ComponentPropsWithoutRef<'pre'>): React.JSX.Element {
+  const preRef = useRef<HTMLPreElement>(null)
+  const [copied, setCopied] = useState(false)
+
+  const onCopy = (e: React.MouseEvent<HTMLButtonElement>): void => {
+    const text = preRef.current?.textContent ?? ''
+    e.currentTarget.blur()
+    void navigator.clipboard.writeText(text).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1200)
+    })
+  }
+
+  return (
+    <div className="code-block-wrap">
+      <button type="button" className="code-copy-btn" onClick={onCopy}>
+        {copied ? 'Copied' : 'Copy'}
+      </button>
+      <pre ref={preRef} {...props}>{children}</pre>
+    </div>
+  )
+}
+
+const markdownComponents: Components = { pre: CodeBlock }
 
 export type Turn =
   | { role: 'user'; text: string }
@@ -38,6 +63,7 @@ function Transcript({ turns, streaming }: Props): React.JSX.Element {
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
                 rehypePlugins={[rehypeHighlight]}
+                components={markdownComponents}
               >
                 {turn.text}
               </ReactMarkdown>
@@ -47,6 +73,7 @@ function Transcript({ turns, streaming }: Props): React.JSX.Element {
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
                 rehypePlugins={[rehypeHighlight]}
+                components={markdownComponents}
               >
                 {turn.text}
               </ReactMarkdown>
@@ -60,6 +87,7 @@ function Transcript({ turns, streaming }: Props): React.JSX.Element {
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}
             rehypePlugins={[rehypeHighlight]}
+            components={markdownComponents}
           >
             {closeOpenFence(streaming)}
           </ReactMarkdown>

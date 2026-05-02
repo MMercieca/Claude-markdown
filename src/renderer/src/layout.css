@@ -142,7 +142,41 @@ html, body {
   border-radius: 6px;
   padding: 12px;
   overflow-x: auto;
+  margin: 0;
+}
+
+#response-content .code-block-wrap {
+  position: relative;
   margin: 0.5em 0;
+}
+
+#response-content .code-copy-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  font: inherit;
+  font-size: 11px;
+  padding: 2px 8px;
+  border: 1px solid var(--divider);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--fg);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 80ms;
+}
+
+#response-content .code-block-wrap:hover .code-copy-btn,
+#response-content .code-copy-btn:focus {
+  opacity: 0.9;
+}
+
+#response-content .code-copy-btn:hover { opacity: 1; }
+
+#response-content .turn-user .code-copy-btn {
+  background: rgba(255, 255, 255, 0.2);
+  color: var(--bubble-fg);
+  border-color: rgba(255, 255, 255, 0.4);
 }
 #response-content pre code {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
