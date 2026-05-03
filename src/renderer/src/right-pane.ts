@@ -62,6 +62,64 @@ export function mountRightPane(
 
   renderIdle()
 
+  // ── View toggle (Structured / Raw JSON) ────────────────────────────────────
+
+  let viewMode: 'structured' | 'raw' = 'structured'
+  const rawEvents: LogEvent[] = []
+
+  const toggleBar = document.createElement('div')
+  toggleBar.className = 'rl-toggle-bar'
+
+  const structuredBtn = document.createElement('button')
+  structuredBtn.className = 'rl-toggle-btn rl-toggle-active'
+  structuredBtn.type = 'button'
+  structuredBtn.textContent = 'Structured'
+
+  const rawBtn = document.createElement('button')
+  rawBtn.className = 'rl-toggle-btn'
+  rawBtn.type = 'button'
+  rawBtn.textContent = 'Raw JSON'
+
+  toggleBar.append(structuredBtn, rawBtn)
+  logEl.insertAdjacentElement('beforebegin', toggleBar)
+
+  const rawEl = document.createElement('div')
+  rawEl.className = 'rl-raw-log'
+  rawEl.hidden = true
+  logEl.insertAdjacentElement('afterend', rawEl)
+
+  function appendRawBlock(ev: LogEvent): void {
+    const pre = document.createElement('pre')
+    pre.className = 'rl-raw-event'
+    pre.textContent = JSON.stringify(ev, null, 2)
+    rawEl.append(pre)
+    rawEl.scrollTop = rawEl.scrollHeight
+  }
+
+  function rebuildRawView(): void {
+    rawEl.innerHTML = ''
+    for (const ev of rawEvents) appendRawBlock(ev)
+  }
+
+  structuredBtn.addEventListener('click', () => {
+    if (viewMode === 'structured') return
+    viewMode = 'structured'
+    structuredBtn.classList.add('rl-toggle-active')
+    rawBtn.classList.remove('rl-toggle-active')
+    logEl.hidden = false
+    rawEl.hidden = true
+  })
+
+  rawBtn.addEventListener('click', () => {
+    if (viewMode === 'raw') return
+    viewMode = 'raw'
+    rawBtn.classList.add('rl-toggle-active')
+    structuredBtn.classList.remove('rl-toggle-active')
+    rebuildRawView()
+    logEl.hidden = true
+    rawEl.hidden = false
+  })
+
   // ── Event log ──────────────────────────────────────────────────────────────
   // Maps toolId → the card element so we can attach the result.
 
@@ -181,6 +239,11 @@ export function mountRightPane(
   }
 
   window.api.session.onLogEvent((ev) => {
+    rawEvents.push(ev)
+    if (viewMode === 'raw') {
+      appendRawBlock(ev)
+    }
+
     if (ev.kind === 'turn_start') {
       appendTurnSep(ev.turnNum ?? 0)
     } else if (ev.kind === 'tool_call') {
