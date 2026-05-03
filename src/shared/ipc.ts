@@ -125,6 +125,7 @@ export interface LogEvent {
   inputJson?: string  // tool_call: JSON.stringify(input, null, 2)
   outputText?: string // tool_result: extracted text content
   isError?: boolean   // tool_result
+  isDenied?: boolean  // tool_result: user denied the permission request
   textLength?: number // assistant_text: character count
 }
 

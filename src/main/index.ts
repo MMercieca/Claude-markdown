@@ -90,6 +90,7 @@ interface SessionState {
   turnNum: number                   // incremented on each session:send
   usage: UsageState                 // last-known usage; rate-limit fields persist across turns
   pendingPermissions: Map<string, (choice: PermissionChoice) => void>  // toolUseID → resolver
+  deniedToolIds: Set<string>  // tools the user denied; used to suppress error styling
 }
 
 const sessions = new Map<number, SessionState>()
@@ -208,13 +209,15 @@ function emitAssistantText(win: BrowserWindow, msg: SDKAssistantMessage): void {
   }
 }
 
-function emitToolResults(win: BrowserWindow, msg: SDKUserMessage): void {
+function emitToolResults(win: BrowserWindow, msg: SDKUserMessage, deniedToolIds: Set<string>): void {
   const content = msg.message.content
   if (!Array.isArray(content)) return
   for (const block of content) {
     if (typeof block !== 'object' || block === null) continue
     const b = block as unknown as Record<string, unknown>
     if (b['type'] !== 'tool_result') continue
+    const toolId = typeof b['tool_use_id'] === 'string' ? b['tool_use_id'] : undefined
+    const isDenied = toolId !== undefined && deniedToolIds.has(toolId)
     const outputText = typeof b['content'] === 'string'
       ? b['content']
       : Array.isArray(b['content'])
@@ -225,9 +228,10 @@ function emitToolResults(win: BrowserWindow, msg: SDKUserMessage): void {
         : ''
     const ev: LogEvent = {
       kind: 'tool_result',
-      toolId: typeof b['tool_use_id'] === 'string' ? b['tool_use_id'] : undefined,
+      toolId,
       outputText,
-      isError: !!b['is_error'],
+      isError: !!b['is_error'] && !isDenied,
+      isDenied,
     }
     win.webContents.send('session:logEvent', ev)
   }
@@ -274,6 +278,7 @@ function makeCanUseTool(
     session.pendingPermissions.delete(opts.toolUseID)
 
     if (choice === 'deny') {
+      session.deniedToolIds.add(opts.toolUseID)
       return { behavior: 'deny', message: `Permission denied for ${toolName}.`, decisionClassification: 'user_reject' }
     }
     if (choice === 'allow_session' && suggestions !== undefined && suggestions.length > 0) {
@@ -353,7 +358,7 @@ async function runQueryLoop(
       } else if (msg.type === 'assistant' && !msg.error) {
         emitAssistantText(win, msg)
       } else if (msg.type === 'user' && msg.parent_tool_use_id !== null) {
-        emitToolResults(win, msg)
+        emitToolResults(win, msg, session.deniedToolIds)
       } else if (msg.type === 'stream_event') {
         const { event: streamEvent } = msg
         if (streamEvent.type === 'content_block_start') {
@@ -492,6 +497,7 @@ ipcMain.handle('session:clear', async (event): Promise<void> => {
   session.turnNum = 0
   session.usage = {}
   session.pendingPermissions = new Map()
+  session.deniedToolIds = new Set()
 
   win.webContents.send('session:cleared')
 })
@@ -723,6 +729,7 @@ async function createWindow(): Promise<void> {
     turnNum: 0,
     usage: {},
     pendingPermissions: new Map(),
+    deniedToolIds: new Set(),
   })
 
   win.on('closed', () => {

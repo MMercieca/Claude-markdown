@@ -330,7 +330,8 @@ window.api.session.onLogEvent((ev) => {
     const label = formatChipLabel(ev.toolName ?? '', ev.inputJson ?? '')
     responseView.addToolChip(ev.toolId, label)
   } else if (ev.kind === 'tool_result' && ev.toolId) {
-    responseView.updateToolChip(ev.toolId, ev.isError ? 'error' : 'ok')
+    const chipStatus = ev.isDenied ? 'denied' : ev.isError ? 'error' : 'ok'
+    responseView.updateToolChip(ev.toolId, chipStatus)
   }
 })
 

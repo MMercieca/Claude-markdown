@@ -35,7 +35,7 @@ const markdownComponents: Components = { pre: CodeBlock }
 export type ToolChip = {
   toolId: string
   label: string
-  status: 'pending' | 'ok' | 'error'
+  status: 'pending' | 'ok' | 'error' | 'denied'
 }
 
 function ToolChipEl({ chip }: { chip: ToolChip }): React.JSX.Element {
@@ -316,7 +316,7 @@ export class ResponseView {
     this.render()
   }
 
-  updateToolChip(toolId: string, status: 'ok' | 'error'): void {
+  updateToolChip(toolId: string, status: 'ok' | 'error' | 'denied'): void {
     if (!this.activeTurn) return
     const chip = this.activeTurn.chipMap.get(toolId)
     if (chip) {

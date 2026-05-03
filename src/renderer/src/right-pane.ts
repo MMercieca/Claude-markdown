@@ -209,11 +209,19 @@ export function mountRightPane(
 
     const status = card.querySelector<HTMLElement>('.rl-tool-status')
     if (status) {
-      status.textContent = ev.isError ? '✗' : '✓'
-      status.className = `rl-tool-status ${ev.isError ? 'rl-status-error' : 'rl-status-ok'}`
+      if (ev.isDenied) {
+        status.textContent = '✗ denied'
+        status.className = 'rl-tool-status rl-status-denied'
+      } else if (ev.isError) {
+        status.textContent = '✗'
+        status.className = 'rl-tool-status rl-status-error'
+      } else {
+        status.textContent = '✓'
+        status.className = 'rl-tool-status rl-status-ok'
+      }
     }
 
-    if (ev.outputText !== undefined && ev.outputText !== '') {
+    if (!ev.isDenied && ev.outputText !== undefined && ev.outputText !== '') {
       const outputSection = card.querySelector<HTMLElement>('.rl-output-section')
       if (outputSection) {
         outputSection.hidden = false
