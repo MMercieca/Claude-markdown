@@ -123,6 +123,9 @@ interface PastedImage extends SerializedImage {
 const pastedImages = new Map<string, PastedImage>()
 let imageCounter = 0
 
+const MAX_ATTACHMENT_SIZE_BYTES = 5 * 1024 * 1024   // 5 MB per file/image
+const MAX_IMAGE_COUNT = 100                      // per prompt
+
 const IMAGE_RE = /\[image-(\d+): \d+×\d+\]/g
 
 function extractImages(text: string): { sendText: string; sendImages: SerializedImage[] } {
@@ -173,6 +176,14 @@ const editor = new EditorView({
           if (handleSlashCommand(rawText, view)) return true
 
           const { sendText, sendImages } = extractImages(rawText)
+
+          if (sendImages.length > MAX_IMAGE_COUNT) {
+            responseView.addSystemMessage(
+              `**Too many images:** this prompt contains ${sendImages.length} images (limit is ${MAX_IMAGE_COUNT}). Remove some before sending.`
+            )
+            return true
+          }
+
           const textToSend = sendText.trim()
 
           view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: '' } })
@@ -229,6 +240,13 @@ editor.dom.addEventListener('drop', (e: DragEvent) => {
   const links: string[] = []
   for (let i = 0; i < files.length; i++) {
     const file = files[i]!
+    if (file.size > MAX_ATTACHMENT_SIZE_BYTES) {
+      const sizeMB = (file.size / (1024 * 1024)).toFixed(1)
+      responseView.addSystemMessage(
+        `**File too large:** ${file.name} is ${sizeMB} MB (limit is 5 MB). Not added.`
+      )
+      continue
+    }
     const absPath = window.api.getFilePath(file)
     if (!absPath) continue
     links.push(`[${file.name}](${absPath})`)
@@ -259,6 +277,14 @@ promptEditorEl.addEventListener('paste', (e: ClipboardEvent) => {
   for (const item of imageItems) {
     const file = item.getAsFile()
     if (!file) continue
+
+    if (file.size > MAX_ATTACHMENT_SIZE_BYTES) {
+      const sizeMB = (file.size / (1024 * 1024)).toFixed(1)
+      responseView.addSystemMessage(
+        `**Image too large:** ${sizeMB} MB exceeds the 5 MB limit. Attachment not added.`
+      )
+      continue
+    }
 
     const id = `image-${++imageCounter}`
     const mimeType = file.type as ImageMediaType
