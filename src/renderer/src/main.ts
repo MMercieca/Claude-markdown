@@ -263,7 +263,52 @@ function handleSlashCommand(text: string, view: EditorView): boolean {
     return true
   }
 
+  if (cmd === '/model') {
+    view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: '' } })
+    void handleModelCommand(text)
+    return true
+  }
+
   return false
+}
+
+async function handleModelCommand(text: string): Promise<void> {
+  const parts = text.trim().split(/\s+/)
+  const config = await window.api.config.get()
+  if (!config) return
+
+  // Bare /model — list models in right pane
+  if (parts.length === 1) {
+    rightPane.showModelList(config.models, config.model)
+    return
+  }
+
+  // /model <name> — change model; accepts full ID, full label, or substring (e.g. "sonnet")
+  const requested = parts[1]!
+  const q = requested.toLowerCase()
+  const match = config.models.find(
+    (m) =>
+      m.id === requested ||
+      m.label.toLowerCase() === q ||
+      m.id.includes(q) ||
+      m.label.toLowerCase().includes(q)
+  )
+
+  if (!match) {
+    responseView.addSystemMessage(
+      `**Unknown model:** \`${requested}\`\n\nAvailable models: ${config.models.map((m) => `\`${m.id}\``).join(', ')}`
+    )
+    return
+  }
+
+  const err = await window.api.session.setModel(match.id)
+  if (err) {
+    responseView.addSystemMessage(`**Failed to set model:** ${err}`)
+    return
+  }
+
+  void statusBarReady.then((sb) => sb.setModel(match.id))
+  responseView.addSystemMessage(`Model changed to **${match.label}** (\`${match.id}\`)`)
 }
 
 async function showInsights(): Promise<void> {

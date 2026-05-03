@@ -65,6 +65,9 @@ const api = {
     clear: (): Promise<void> =>
       ipcRenderer.invoke('session:clear') as Promise<void>,
 
+    setModel: (model: string): Promise<string | null> =>
+      ipcRenderer.invoke('session:setModel', model) as Promise<string | null>,
+
     onCleared: (cb: () => void): (() => void) => {
       const listener = () => cb()
       ipcRenderer.on('session:cleared', listener)

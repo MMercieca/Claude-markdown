@@ -251,6 +251,39 @@ html, body {
   opacity: 0.85;
 }
 
+/* ── Model list card ── */
+
+.rl-model-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 3px 0;
+  font-size: 12px;
+}
+
+.rl-model-current { font-weight: 500; }
+
+.rl-model-label { flex-shrink: 0; }
+
+.rl-model-id {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  opacity: 0.5;
+  flex: 1;
+}
+
+.rl-model-badge {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #1a7f37;
+  opacity: 0.8;
+}
+
+@media (prefers-color-scheme: dark) {
+  .rl-model-badge { color: #3fb950; }
+}
+
 /* ── Permission card ── */
 
 .rl-permission-card {

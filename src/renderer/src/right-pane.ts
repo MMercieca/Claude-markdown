@@ -1,9 +1,10 @@
-import type { TurnStats, LogEvent, PermissionRequest, PermissionChoice } from '../../shared/ipc'
+import type { TurnStats, LogEvent, PermissionRequest, PermissionChoice, ModelOption } from '../../shared/ipc'
 
 export interface RightPaneHandle {
   setActive(activity?: string): void
   setIdle(): void
   clear(): void
+  showModelList(models: ModelOption[], currentModel: string): void
 }
 
 export function mountRightPane(
@@ -410,6 +411,51 @@ export function mountRightPane(
   return {
     setActive(activity?: string): void { renderActive(activity) },
     setIdle(): void { renderIdle() },
+    showModelList(models: ModelOption[], currentModel: string): void {
+      const card = document.createElement('div')
+      card.className = 'rl-tool-card'
+
+      const header = document.createElement('div')
+      header.className = 'rl-card-header'
+
+      const icon = document.createElement('span')
+      icon.className = 'rl-tool-icon'
+      icon.textContent = '◎'
+
+      const title = document.createElement('span')
+      title.className = 'rl-tool-name'
+      title.textContent = 'Available models'
+
+      header.append(icon, title)
+
+      const body = document.createElement('div')
+      body.className = 'rl-card-body'
+      body.hidden = false
+
+      for (const m of models) {
+        const row = document.createElement('div')
+        row.className = `rl-model-row${m.id === currentModel ? ' rl-model-current' : ''}`
+        const label = document.createElement('span')
+        label.className = 'rl-model-label'
+        label.textContent = m.label
+        const id = document.createElement('span')
+        id.className = 'rl-model-id'
+        id.textContent = m.id
+        if (m.id === currentModel) {
+          const badge = document.createElement('span')
+          badge.className = 'rl-model-badge'
+          badge.textContent = 'current'
+          row.append(label, id, badge)
+        } else {
+          row.append(label, id)
+        }
+        body.append(row)
+      }
+
+      card.append(header, body)
+      logEl.append(card)
+      logEl.scrollTop = logEl.scrollHeight
+    },
     clear(): void {
       logEl.innerHTML = ''
       rawEl.innerHTML = ''

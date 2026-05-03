@@ -5,6 +5,8 @@ export interface StatusBarHandle {
   freeze(): void
   /** Return to config mode and reset usage state. Called after /clear. */
   unfreeze(): void
+  /** Update the displayed model after a mid-session /model change. */
+  setModel(model: string): void
 }
 
 // Config-mode status bar. Renders `cwd | model | effort` with [change]
@@ -29,7 +31,7 @@ function modelLabel(id: string, models: ModelOption[]): string {
 
 export async function mountStatusBar(container: HTMLElement): Promise<StatusBarHandle> {
   const config = await window.api.config.get()
-  if (!config) return { freeze: () => {}, unfreeze: () => {} }
+  if (!config) return { freeze: () => {}, unfreeze: () => {}, setModel: () => {} }
 
   let current: ConfigBootstrap = config
   let frozen = false
@@ -198,6 +200,10 @@ export async function mountStatusBar(container: HTMLElement): Promise<StatusBarH
       sepUsage = null
       usageWrap.remove()
       container.append(sep3, authItem)
+      paint()
+    },
+    setModel(model: string): void {
+      current = { ...current, model }
       paint()
     },
   }

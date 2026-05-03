@@ -433,6 +433,22 @@ ipcMain.handle('session:interrupt', async (event): Promise<void> => {
   }
 })
 
+// ── Session setModel handler ────────────────────────────────────────────────
+
+ipcMain.handle('session:setModel', async (event, model: string): Promise<string | null> => {
+  const session = sessions.get(event.sender.id)
+  if (!session) return 'No session found.'
+  try {
+    if (session.activeQueryObj) {
+      await session.activeQueryObj.setModel(model)
+    }
+    session.model = model
+    return null
+  } catch (err) {
+    return err instanceof Error ? err.message : String(err)
+  }
+})
+
 // ── Session clear handler ───────────────────────────────────────────────────
 
 ipcMain.handle('session:clear', async (event): Promise<void> => {
