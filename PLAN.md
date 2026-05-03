@@ -83,8 +83,8 @@ Adds support for **claude.ai OAuth** (Pro/Max subscription, used at home) and **
 
 ## Phase 11 — Building
 
-- [ ] **36. Application build.** Ensure the application can be built on MacOS.
-- [ ] **37. Shell shortcut.** Provide a small shell script that will launch the Electron application and set the `%CWD` variable to the directory the application was launched from.
+- [x] **36. Application build.** Ensure the application can be built on MacOS.
+- [x] **37. Shell shortcut.** Provide a small shell script that will launch the Electron application and set the `%CWD` variable to the directory the application was launched from.
 
 ## Phase 12 — Attachments
 
