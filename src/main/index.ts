@@ -16,6 +16,7 @@ import type {
   SignInStatus,
   AuthError,
   BlockingError,
+  ConfigError,
   TurnStats,
   LogEvent,
   PermissionRequest,
@@ -142,12 +143,31 @@ interface UserSettings {
   allowedTools: string[]  // from permissions.allow in ~/.claude/settings.json
 }
 
-async function readUserSettings(): Promise<UserSettings> {
+let cachedUserSettings: UserSettings | null = null
+let cachedSettingsParseError: string | null = null
+
+async function getUserSettings(): Promise<UserSettings> {
+  if (cachedUserSettings !== null) return cachedUserSettings
+
+  const defaults: UserSettings = { model: SDK_DEFAULT_MODEL, effort: SDK_DEFAULT_EFFORT, allowedTools: [] }
+  let raw: string
   try {
-    const raw = await readFile(join(homedir(), '.claude', 'settings.json'), 'utf-8')
+    raw = await readFile(join(homedir(), '.claude', 'settings.json'), 'utf-8')
+  } catch (err) {
+    const code = (err as { code?: string }).code
+    if (code !== 'ENOENT') {
+      cachedSettingsParseError = `Could not read ~/.claude/settings.json: ${err instanceof Error ? err.message : String(err)}`
+    }
+    cachedUserSettings = defaults
+    return cachedUserSettings
+  }
+
+  try {
     const parsed: unknown = JSON.parse(raw)
     if (parsed === null || typeof parsed !== 'object') {
-      return { model: SDK_DEFAULT_MODEL, effort: SDK_DEFAULT_EFFORT, allowedTools: [] }
+      cachedSettingsParseError = '~/.claude/settings.json is not a valid JSON object.'
+      cachedUserSettings = defaults
+      return cachedUserSettings
     }
     const obj = parsed as Record<string, unknown>
     const perms = obj['permissions'] as Record<string, unknown> | undefined
@@ -155,20 +175,18 @@ async function readUserSettings(): Promise<UserSettings> {
     const allowedTools = Array.isArray(allowRaw)
       ? allowRaw.filter((x): x is string => typeof x === 'string')
       : []
-    return {
+    cachedSettingsParseError = null
+    cachedUserSettings = {
       model: typeof obj['model'] === 'string' ? obj['model'] : SDK_DEFAULT_MODEL,
       effort: isEffort(obj['effort']) ? obj['effort'] : SDK_DEFAULT_EFFORT,
       allowedTools,
     }
-  } catch {
-    return { model: SDK_DEFAULT_MODEL, effort: SDK_DEFAULT_EFFORT, allowedTools: [] }
+    return cachedUserSettings
+  } catch (err) {
+    cachedSettingsParseError = `~/.claude/settings.json has invalid JSON: ${err instanceof Error ? err.message : String(err)}`
+    cachedUserSettings = defaults
+    return cachedUserSettings
   }
-}
-
-let cachedUserSettings: UserSettings | null = null
-async function getUserSettings(): Promise<UserSettings> {
-  cachedUserSettings ??= await readUserSettings()
-  return cachedUserSettings
 }
 
 // ── Usage tracking ──────────────────────────────────────────────────────────
@@ -334,6 +352,9 @@ async function runQueryLoop(
   channel: PromptChannel,
 ): Promise<void> {
   const userSettings = await getUserSettings()
+  if (cachedSettingsParseError) {
+    win.webContents.send('session:configError', { message: cachedSettingsParseError } satisfies ConfigError)
+  }
   const settingsAllowlist = new Set(userSettings.allowedTools)
   const q = query({
     prompt: channel,
@@ -465,7 +486,14 @@ async function runQueryLoop(
   } catch (err) {
     console.error('[session] Query loop error:', err)
     if (!win.isDestroyed()) {
-      win.webContents.send('session:blockingError', classifyBlockingError(err))
+      const errMsg = (err instanceof Error ? err.message : String(err)).toLowerCase()
+      const isHookError = errMsg.includes('hook')
+      if (isHookError) {
+        const msg = err instanceof Error ? err.message : String(err)
+        win.webContents.send('session:configError', { message: `Hook failure: ${msg}` } satisfies ConfigError)
+      } else {
+        win.webContents.send('session:blockingError', classifyBlockingError(err))
+      }
       if (session.activeQuery) {
         session.activeQuery = false
         win.webContents.send('session:done')
@@ -779,6 +807,19 @@ ipcMain.handle('config:setAuthMode', (event, mode: AuthMode): void => {
   const session = sessions.get(event.sender.id)
   if (!session) return
   session.authMode = mode
+})
+
+ipcMain.handle('config:reloadSettings', async (event): Promise<void> => {
+  const win = BrowserWindow.fromWebContents(event.sender)
+  if (!win) return
+  cachedUserSettings = null
+  cachedSettingsParseError = null
+  await getUserSettings()
+  if (!win.isDestroyed()) {
+    win.webContents.send('session:configError',
+      cachedSettingsParseError ? ({ message: cachedSettingsParseError } satisfies ConfigError) : null
+    )
+  }
 })
 
 // ── Window factory ──────────────────────────────────────────────────────────

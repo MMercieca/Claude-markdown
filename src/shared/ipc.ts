@@ -53,6 +53,7 @@ export interface RendererToMain {
   'config:setModel'(model: string): void
   'config:setEffort'(effort: EffortLevel): void
   'config:setAuthMode'(mode: AuthMode): void
+  'config:reloadSettings'(): void
 }
 
 export type ImageMediaType = 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp'
@@ -93,6 +94,10 @@ export interface SignInStatus {
 export interface AuthError {
   authMode: AuthMode
   /** human-readable description of what went wrong */
+  message: string
+}
+
+export interface ConfigError {
   message: string
 }
 
@@ -146,6 +151,7 @@ export interface MainToRenderer {
   'session:signInStatus': SignInStatus  // progress/result of claude.ai OAuth sign-in
   'session:authError': AuthError | null  // null = dismiss the banner
   'session:blockingError': BlockingError | null  // null = dismiss the banner
+  'session:configError': ConfigError | null      // null = dismiss the banner
   'session:turnStats': TurnStats        // emitted with each result message
   'session:logEvent': LogEvent          // structured event for the right-pane log
   'session:permissionRequest': PermissionRequest  // tool permission required; agent paused

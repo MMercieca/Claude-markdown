@@ -574,6 +574,52 @@ html, body {
 
 .blocking-error-dismiss { opacity: 0.6; }
 
+.config-error-banner {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  border-radius: 6px;
+  background: rgba(161, 138, 0, 0.08);
+  border: 1px solid rgba(161, 138, 0, 0.3);
+  font-size: 12px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .config-error-banner {
+    background: rgba(234, 179, 8, 0.08);
+    border-color: rgba(234, 179, 8, 0.3);
+  }
+}
+
+.config-error-msg { flex: 1; min-width: 0; }
+
+.config-error-actions {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.config-error-reload-btn,
+.config-error-dismiss {
+  background: transparent;
+  border: 1px solid var(--divider);
+  border-radius: 4px;
+  padding: 2px 8px;
+  font: inherit;
+  font-size: 11px;
+  color: inherit;
+  cursor: pointer;
+}
+
+.config-error-reload-btn:hover,
+.config-error-dismiss:hover { background: var(--divider); }
+
+.config-error-dismiss { opacity: 0.6; }
+
 .auth-banner {
   display: flex;
   align-items: baseline;

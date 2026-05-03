@@ -3,7 +3,7 @@ import { useEffect, useRef, useState, type ComponentPropsWithoutRef } from 'reac
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeHighlight from 'rehype-highlight'
-import type { AuthError, BlockingError, SerializedImage } from '../../shared/ipc'
+import type { AuthError, BlockingError, ConfigError, SerializedImage } from '../../shared/ipc'
 
 function CodeBlock({ children, ...props }: ComponentPropsWithoutRef<'pre'>): React.JSX.Element {
   const preRef = useRef<HTMLPreElement>(null)
@@ -178,6 +178,32 @@ function BlockingErrorBanner({
   )
 }
 
+function ConfigErrorBanner({
+  error,
+  onDismiss,
+}: {
+  error: ConfigError
+  onDismiss: () => void
+}): React.JSX.Element {
+  return (
+    <div className="config-error-banner" role="alert">
+      <span className="config-error-msg">{error.message}</span>
+      <span className="config-error-actions">
+        <button
+          className="config-error-reload-btn"
+          type="button"
+          onClick={() => void window.api.config.reloadSettings()}
+        >
+          Reload settings
+        </button>
+        <button className="config-error-dismiss" type="button" onClick={onDismiss}>
+          Dismiss
+        </button>
+      </span>
+    </div>
+  )
+}
+
 function closeOpenFence(buf: string): string {
   const fenceLines = buf.match(/^```/gm)?.length ?? 0
   return fenceLines % 2 === 1 ? buf + '\n```' : buf
@@ -235,9 +261,11 @@ interface Props {
   blockingError: BlockingError | null
   onDismissBlockingError: () => void
   onRetry: () => void
+  configError: ConfigError | null
+  onDismissConfigError: () => void
 }
 
-function Transcript({ turns, activeTurn, authError, onDismissAuthError, blockingError, onDismissBlockingError, onRetry }: Props): React.JSX.Element {
+function Transcript({ turns, activeTurn, authError, onDismissAuthError, blockingError, onDismissBlockingError, onRetry, configError, onDismissConfigError }: Props): React.JSX.Element {
   const endRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -252,6 +280,7 @@ function Transcript({ turns, activeTurn, authError, onDismissAuthError, blocking
   return (
     <>
       {blockingError && <BlockingErrorBanner error={blockingError} onDismiss={onDismissBlockingError} onRetry={onRetry} />}
+      {configError && <ConfigErrorBanner error={configError} onDismiss={onDismissConfigError} />}
       {authError && <AuthBanner error={authError} onDismiss={onDismissAuthError} />}
       {turns.map((turn, i) => (
         <div key={i} className={`turn turn-${turn.role}`}>
@@ -322,6 +351,7 @@ export class ResponseView {
   } | null = null
   private authError: AuthError | null = null
   private blockingError: BlockingError | null = null
+  private configError: ConfigError | null = null
 
   constructor(container: HTMLElement) {
     this.root = createRoot(container)
@@ -341,8 +371,15 @@ export class ResponseView {
         blockingError={this.blockingError}
         onDismissBlockingError={() => { this.blockingError = null; this.render() }}
         onRetry={() => { this.blockingError = null; void window.api.session.retry(); this.render() }}
+        configError={this.configError}
+        onDismissConfigError={() => { this.configError = null; this.render() }}
       />
     )
+  }
+
+  showConfigError(error: ConfigError | null): void {
+    this.configError = error
+    this.render()
   }
 
   showBlockingError(error: BlockingError | null): void {

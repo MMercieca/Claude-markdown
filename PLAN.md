@@ -96,7 +96,7 @@ Adds support for **claude.ai OAuth** (Pro/Max subscription, used at home) and **
 
 - [x] **41. Tool errors render as red chip + red right-pane card.** Permission denials show `denied` status (not error styling).
 - [x] **42. Blocking error banner with `[Retry] [Dismiss]`.** Network/4xx/5xx/rate-limit/SDK crash. Quota errors get a live countdown.
-- [ ] **43. Config error banner with `[Reload settings]`.** Hook failures, malformed settings.
+- [x] **43. Config error banner with `[Reload settings]`.** Hook failures, malformed settings.
 - [ ] **44. Compaction marker.** On `SDKCompactBoundaryMessage`: thin divider in transcript with `[show summary]` toggle; mirrored card in right pane; usage display reflects post-compact state.
 
 ## Phase 14 — Multi-window + MCP polish
