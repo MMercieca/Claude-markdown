@@ -438,6 +438,37 @@ html, body {
   font-family: inherit;
 }
 
+.tool-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: transparent;
+  border: 1px solid var(--divider);
+  border-radius: 12px;
+  padding: 2px 10px 2px 8px;
+  font: inherit;
+  font-size: 11px;
+  color: inherit;
+  cursor: pointer;
+  margin: 2px 0;
+  opacity: 0.75;
+  transition: opacity 80ms;
+}
+
+.tool-chip:hover { opacity: 1; background: var(--divider); }
+
+.tool-chip-icon   { opacity: 0.6; }
+.tool-chip-label  { opacity: 0.85; }
+.tool-chip-status { font-weight: 600; opacity: 0.7; }
+
+.tool-chip-ok    .tool-chip-status { color: #1a7f37; opacity: 1; }
+.tool-chip-error .tool-chip-status { color: #cf222e; opacity: 1; }
+
+@media (prefers-color-scheme: dark) {
+  .tool-chip-ok    .tool-chip-status { color: #3fb950; }
+  .tool-chip-error .tool-chip-status { color: #f85149; }
+}
+
 #response-content .interrupted {
   opacity: 0.6;
   font-style: italic;

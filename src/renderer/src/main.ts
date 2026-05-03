@@ -181,6 +181,15 @@ window.api.session.onDone(() => {
   editor.focus()
 })
 
+window.api.session.onLogEvent((ev) => {
+  if (ev.kind === 'tool_call' && ev.toolId) {
+    const label = formatChipLabel(ev.toolName ?? '', ev.inputJson ?? '')
+    responseView.addToolChip(ev.toolId, label)
+  } else if (ev.kind === 'tool_result' && ev.toolId) {
+    responseView.updateToolChip(ev.toolId, ev.isError ? 'error' : 'ok')
+  }
+})
+
 window.api.session.onAuthError((error) => {
   responseView.showAuthError(error)
 })
@@ -202,3 +211,26 @@ document.addEventListener('keydown', (e: KeyboardEvent) => {
     void window.api.session.interrupt()
   }
 })
+
+// ── Chip label formatting ───────────────────────────────────────────────────
+
+function formatChipLabel(toolName: string, inputJson: string): string {
+  try {
+    const input = JSON.parse(inputJson) as Record<string, unknown>
+    const path = input['path'] ?? input['file_path'] ?? input['filename'] ?? input['filepath']
+    if (typeof path === 'string') {
+      const base = path.split('/').pop() ?? path
+      return `${toolName} ${base}`
+    }
+    const cmd = input['command']
+    if (typeof cmd === 'string') {
+      const snippet = cmd.length > 40 ? cmd.slice(0, 40) + '…' : cmd
+      return `${toolName}: ${snippet}`
+    }
+    const pattern = input['pattern'] ?? input['glob']
+    if (typeof pattern === 'string') {
+      return `${toolName} ${pattern}`
+    }
+  } catch { /* fall through */ }
+  return toolName
+}

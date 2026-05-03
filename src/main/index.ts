@@ -166,24 +166,18 @@ function applyRateLimitEvent(session: SessionState, info: SDKRateLimitInfo): voi
 }
 
 // ── Log event helpers ───────────────────────────────────────────────────────
+// The SDK strips tool_use blocks from SDKAssistantMessage.message.content
+// before emitting, so tool calls must be captured from content_block_start
+// stream events. Text blocks remain and are used for assistant_text chips.
 
-function emitLogEvents(win: BrowserWindow, msg: SDKAssistantMessage): void {
+function emitAssistantText(win: BrowserWindow, msg: SDKAssistantMessage): void {
   if (!Array.isArray(msg.message.content)) return
   for (const block of msg.message.content) {
-    if (block.type === 'tool_use') {
-      const ev: LogEvent = {
-        kind: 'tool_call',
-        toolName: block.name,
-        toolId: block.id,
-        inputJson: JSON.stringify(block.input, null, 2),
-      }
-      win.webContents.send('session:logEvent', ev)
-    } else if (block.type === 'text' && block.text.trim()) {
-      const ev: LogEvent = {
+    if (block.type === 'text' && block.text.trim()) {
+      win.webContents.send('session:logEvent', {
         kind: 'assistant_text',
         textLength: block.text.length,
-      }
-      win.webContents.send('session:logEvent', ev)
+      } satisfies LogEvent)
     }
   }
 }
@@ -263,6 +257,10 @@ async function runQueryLoop(
     win.webContents.send('session:authError', authError)
   }
 
+  // Per-block accumulator for streaming tool inputs.
+  // Key = content block index; cleared when the block stops or the turn ends.
+  const pendingToolCalls = new Map<number, { toolId: string; toolName: string; inputAccum: string }>()
+
   try {
     for await (const msg of q) {
       if (win.isDestroyed()) break
@@ -274,16 +272,43 @@ async function runQueryLoop(
         }
         win.webContents.send('session:authError', authError)
       } else if (msg.type === 'assistant' && !msg.error) {
-        emitLogEvents(win, msg)
+        emitAssistantText(win, msg)
       } else if (msg.type === 'user' && msg.parent_tool_use_id !== null) {
         emitToolResults(win, msg)
       } else if (msg.type === 'stream_event') {
         const { event: streamEvent } = msg
-        if (
-          streamEvent.type === 'content_block_delta' &&
-          streamEvent.delta.type === 'text_delta'
-        ) {
-          win.webContents.send('session:delta', streamEvent.delta.text)
+        if (streamEvent.type === 'content_block_start') {
+          const cb = streamEvent.content_block
+          if (cb.type === 'tool_use' || cb.type === 'mcp_tool_use') {
+            pendingToolCalls.set(streamEvent.index, {
+              toolId: cb.id,
+              toolName: cb.name,
+              inputAccum: '',
+            })
+          }
+        } else if (streamEvent.type === 'content_block_delta') {
+          if (streamEvent.delta.type === 'text_delta') {
+            win.webContents.send('session:delta', streamEvent.delta.text)
+          } else if (streamEvent.delta.type === 'input_json_delta') {
+            const pending = pendingToolCalls.get(streamEvent.index)
+            if (pending) pending.inputAccum += streamEvent.delta.partial_json
+          }
+        } else if (streamEvent.type === 'content_block_stop') {
+          const pending = pendingToolCalls.get(streamEvent.index)
+          if (pending) {
+            pendingToolCalls.delete(streamEvent.index)
+            let inputJson = '{}'
+            try {
+              const parsed: unknown = JSON.parse(pending.inputAccum || '{}')
+              inputJson = JSON.stringify(parsed, null, 2)
+            } catch { /* leave as '{}' */ }
+            win.webContents.send('session:logEvent', {
+              kind: 'tool_call',
+              toolName: pending.toolName,
+              toolId: pending.toolId,
+              inputJson,
+            } satisfies LogEvent)
+          }
         }
       } else if (msg.type === 'rate_limit_event') {
         applyRateLimitEvent(session, msg.rate_limit_info)
@@ -302,6 +327,7 @@ async function runQueryLoop(
         } catch (err) {
           console.warn('[session] getContextUsage failed:', err)
         }
+        pendingToolCalls.clear()
         win.webContents.send('session:usage', session.usage)
         const turnStats: TurnStats = {
           inputTokens: msg.usage.input_tokens,

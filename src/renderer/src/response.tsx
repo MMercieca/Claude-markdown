@@ -30,9 +30,56 @@ function CodeBlock({ children, ...props }: ComponentPropsWithoutRef<'pre'>): Rea
 
 const markdownComponents: Components = { pre: CodeBlock }
 
+// ── Tool chips ──────────────────────────────────────────────────────────────
+
+export type ToolChip = {
+  toolId: string
+  label: string
+  status: 'pending' | 'ok' | 'error'
+}
+
+function ToolChipEl({ chip }: { chip: ToolChip }): React.JSX.Element {
+  const onClick = (): void => {
+    const card = document.querySelector<HTMLElement>(`[data-tool-id="${chip.toolId}"]`)
+    if (!card) return
+    card.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    const body = card.querySelector<HTMLElement>('.rl-card-body')
+    const btn = card.querySelector<HTMLButtonElement>('.rl-expand-btn')
+    if (body?.hidden) {
+      body.hidden = false
+      if (btn) {
+        btn.textContent = '▼'
+        btn.setAttribute('aria-expanded', 'true')
+      }
+    }
+  }
+
+  const statusIcon = chip.status === 'pending' ? '…' : chip.status === 'ok' ? '✓' : '✗'
+  return (
+    <button
+      type="button"
+      className={`tool-chip tool-chip-${chip.status}`}
+      onClick={onClick}
+      title="Click to expand in right pane"
+    >
+      <span className="tool-chip-icon">⚙</span>
+      <span className="tool-chip-label">{chip.label}</span>
+      <span className="tool-chip-status">{statusIcon}</span>
+    </button>
+  )
+}
+
+// ── Turn types ──────────────────────────────────────────────────────────────
+
+export type TurnSegment =
+  | { kind: 'text'; content: string }
+  | { kind: 'chip'; chip: ToolChip }
+
 export type Turn =
   | { role: 'user'; text: string }
-  | { role: 'assistant'; text: string; interrupted?: boolean }
+  | { role: 'assistant'; segments: TurnSegment[]; interrupted?: boolean }
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
 
 const ANTHROPIC_API_DOCS = 'https://docs.anthropic.com/en/api/getting-started'
 
@@ -75,28 +122,73 @@ function AuthBanner({ error, onDismiss }: { error: AuthError; onDismiss: () => v
   )
 }
 
-interface Props {
-  turns: Turn[]
-  streaming: string | null
-  authError: AuthError | null
-  onDismissAuthError: () => void
-}
-
-// While streaming, if the buffer contains an opened-but-unclosed ``` fence,
-// append a synthetic closer so remark parses everything from the opener
-// onward as a code block instead of a paragraph. Avoids the worst flicker
-// case before the model emits the closing fence.
 function closeOpenFence(buf: string): string {
   const fenceLines = buf.match(/^```/gm)?.length ?? 0
   return fenceLines % 2 === 1 ? buf + '\n```' : buf
 }
 
-function Transcript({ turns, streaming, authError, onDismissAuthError }: Props): React.JSX.Element {
+function AssistantSegments({
+  segments,
+  currentText,
+}: {
+  segments: TurnSegment[]
+  currentText?: string
+}): React.JSX.Element {
+  return (
+    <>
+      {segments.map((seg, i) =>
+        seg.kind === 'text' ? (
+          <ReactMarkdown
+            key={i}
+            remarkPlugins={[remarkGfm]}
+            rehypePlugins={[rehypeHighlight]}
+            components={markdownComponents}
+          >
+            {seg.content}
+          </ReactMarkdown>
+        ) : (
+          <ToolChipEl key={i} chip={seg.chip} />
+        )
+      )}
+      {currentText !== undefined && currentText !== '' && (
+        <ReactMarkdown
+          key="streaming"
+          remarkPlugins={[remarkGfm]}
+          rehypePlugins={[rehypeHighlight]}
+          components={markdownComponents}
+        >
+          {closeOpenFence(currentText)}
+        </ReactMarkdown>
+      )}
+    </>
+  )
+}
+
+// ── Transcript ───────────────────────────────────────────────────────────────
+
+interface ActiveTurnState {
+  segments: TurnSegment[]
+  currentText: string
+}
+
+interface Props {
+  turns: Turn[]
+  activeTurn: ActiveTurnState | null
+  authError: AuthError | null
+  onDismissAuthError: () => void
+}
+
+function Transcript({ turns, activeTurn, authError, onDismissAuthError }: Props): React.JSX.Element {
   const endRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: 'end' })
-  }, [turns, streaming])
+  }, [turns, activeTurn])
+
+  const showSpinner =
+    activeTurn !== null &&
+    activeTurn.segments.length === 0 &&
+    activeTurn.currentText === ''
 
   return (
     <>
@@ -115,34 +207,25 @@ function Transcript({ turns, streaming, authError, onDismissAuthError }: Props):
             </div>
           ) : (
             <>
-              <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                rehypePlugins={[rehypeHighlight]}
-                components={markdownComponents}
-              >
-                {turn.text}
-              </ReactMarkdown>
+              <AssistantSegments segments={turn.segments} />
               {turn.interrupted && <div className="interrupted">[interrupted]</div>}
             </>
           )}
         </div>
       ))}
-      {streaming !== null && (
+      {activeTurn !== null && (
         <div className="turn turn-assistant streaming">
-          <ReactMarkdown
-            remarkPlugins={[remarkGfm]}
-            rehypePlugins={[rehypeHighlight]}
-            components={markdownComponents}
-          >
-            {closeOpenFence(streaming)}
-          </ReactMarkdown>
-        </div>
-      )}
-      {streaming === '' && (
-        <div className="activity-spinner" aria-label="Working">
-          <span className="dot" />
-          <span className="dot" />
-          <span className="dot" />
+          <AssistantSegments
+            segments={activeTurn.segments}
+            currentText={activeTurn.currentText}
+          />
+          {showSpinner && (
+            <div className="activity-spinner" aria-label="Working">
+              <span className="dot" />
+              <span className="dot" />
+              <span className="dot" />
+            </div>
+          )}
         </div>
       )}
       <div ref={endRef} />
@@ -150,10 +233,16 @@ function Transcript({ turns, streaming, authError, onDismissAuthError }: Props):
   )
 }
 
+// ── ResponseView ─────────────────────────────────────────────────────────────
+
 export class ResponseView {
   private root: Root
   private turns: Turn[] = []
-  private streaming: string | null = null
+  private activeTurn: {
+    segments: TurnSegment[]
+    currentText: string
+    chipMap: Map<string, ToolChip>
+  } | null = null
   private authError: AuthError | null = null
 
   constructor(container: HTMLElement) {
@@ -162,10 +251,13 @@ export class ResponseView {
   }
 
   private render(): void {
+    const activeTurnState = this.activeTurn
+      ? { segments: this.activeTurn.segments, currentText: this.activeTurn.currentText }
+      : null
     this.root.render(
       <Transcript
         turns={this.turns}
-        streaming={this.streaming}
+        activeTurn={activeTurnState}
         authError={this.authError}
         onDismissAuthError={() => { this.authError = null; this.render() }}
       />
@@ -183,28 +275,48 @@ export class ResponseView {
   }
 
   startAssistantTurn(): void {
-    this.streaming = ''
+    this.activeTurn = { segments: [], currentText: '', chipMap: new Map() }
     this.render()
   }
 
   appendDelta(delta: string): void {
-    this.streaming = (this.streaming ?? '') + delta
+    if (!this.activeTurn) return
+    this.activeTurn.currentText += delta
     this.render()
   }
 
-  finishAssistantTurn(): void {
-    if (this.streaming !== null) {
-      this.turns.push({ role: 'assistant', text: this.streaming })
-      this.streaming = null
+  addToolChip(toolId: string, label: string): void {
+    if (!this.activeTurn) return
+    // Freeze any buffered streaming text as a text segment
+    if (this.activeTurn.currentText) {
+      this.activeTurn.segments.push({ kind: 'text', content: this.activeTurn.currentText })
+      this.activeTurn.currentText = ''
+    }
+    const chip: ToolChip = { toolId, label, status: 'pending' }
+    this.activeTurn.chipMap.set(toolId, chip)
+    this.activeTurn.segments.push({ kind: 'chip', chip })
+    this.render()
+  }
+
+  updateToolChip(toolId: string, status: 'ok' | 'error'): void {
+    if (!this.activeTurn) return
+    const chip = this.activeTurn.chipMap.get(toolId)
+    if (chip) {
+      chip.status = status
       this.render()
     }
   }
 
-  markInterrupted(): void {
-    if (this.streaming !== null) {
-      this.turns.push({ role: 'assistant', text: this.streaming, interrupted: true })
-      this.streaming = null
-      this.render()
+  private freezeActiveTurn(interrupted = false): void {
+    if (!this.activeTurn) return
+    if (this.activeTurn.currentText) {
+      this.activeTurn.segments.push({ kind: 'text', content: this.activeTurn.currentText })
     }
+    this.turns.push({ role: 'assistant', segments: this.activeTurn.segments, interrupted })
+    this.activeTurn = null
+    this.render()
   }
+
+  finishAssistantTurn(): void { this.freezeActiveTurn(false) }
+  markInterrupted(): void    { this.freezeActiveTurn(true) }
 }

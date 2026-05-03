@@ -134,10 +134,13 @@ export function mountRightPane(
       expandBtn.textContent = expanded ? '▼' : '▶'
     })
 
+    if (ev.toolId) {
+      card.dataset.toolId = ev.toolId
+      toolCards.set(ev.toolId, card)
+    }
+
     logEl.append(card)
     logEl.scrollTop = logEl.scrollHeight
-
-    if (ev.toolId) toolCards.set(ev.toolId, card)
   }
 
   function applyToolResult(ev: LogEvent): void {
