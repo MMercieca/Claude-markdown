@@ -8,6 +8,7 @@ import 'highlight.js/styles/github.css'
 import { ResponseView } from './response'
 import { mountStatusBar } from './status-bar'
 import { mountRightPane } from './right-pane'
+import type { UsageState, AuthInfo } from '../../shared/ipc'
 
 const leftCol = document.getElementById('left-col') as HTMLElement
 const responsePane = document.getElementById('response-pane') as HTMLElement
@@ -117,6 +118,9 @@ const editableCompartment = new Compartment()
 
 // Tracks whether the agent is currently generating.
 let agentActive = false
+let insightsUsage: UsageState = {}
+let insightsAuth: AuthInfo | null = null
+let insightsTurnCount = 0
 
 const rightPane = mountRightPane(rightHeader, rightLog, () => {
   responseView.markInterrupted()
@@ -136,9 +140,11 @@ const editor = new EditorView({
         run: (view): boolean => {
           const text = view.state.doc.toString().trim()
           if (!text) return true
+          if (handleSlashCommand(text, view)) return true
           view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: '' } })
           view.dispatch({ effects: editableCompartment.reconfigure(EditorView.editable.of(false)) })
           agentActive = true
+          insightsTurnCount++
           rightPane.setActive()
           responseView.addUserTurn(text)
           responseView.startAssistantTurn()
@@ -200,10 +206,25 @@ window.api.session.onSignInStatus((status) => {
   }
 })
 
+window.api.session.onUsage((u) => { insightsUsage = { ...insightsUsage, ...u } })
+window.api.session.onAuth((a) => { insightsAuth = a })
+
+window.api.session.onCleared(() => {
+  responseView.clear()
+  rightPane.clear()
+  void statusBarReady.then((sb) => sb.unfreeze())
+  insightsUsage = {}
+  insightsAuth = null
+  insightsTurnCount = 0
+  agentActive = false
+  setEditorEditable(true)
+  editor.focus()
+})
+
 // Escape is handled at the document level because the editor is non-editable
 // while the agent is active and won't dispatch keymaps in that state.
 document.addEventListener('keydown', (e: KeyboardEvent) => {
-  if (e.key === 'Escape' && agentActive) {
+  if (e.key === 'Escape' && agentActive && !document.getElementById('help-overlay')) {
     e.preventDefault()
     responseView.markInterrupted()
     rightPane.setIdle()
@@ -211,6 +232,183 @@ document.addEventListener('keydown', (e: KeyboardEvent) => {
     void window.api.session.interrupt()
   }
 })
+
+// ── Slash command interceptor ───────────────────────────────────────────────
+
+function handleSlashCommand(text: string, view: EditorView): boolean {
+  const cmd = text.split(/\s+/)[0]!.toLowerCase()
+
+  if (cmd === '/clear') {
+    view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: '' } })
+    void window.api.session.clear()
+    return true
+  }
+
+  if (cmd === '/help') {
+    view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: '' } })
+    showHelpOverlay()
+    return true
+  }
+
+  if (cmd === '/cost') {
+    view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: '' } })
+    rightLog.scrollTop = rightLog.scrollHeight
+    rightLog.focus()
+    return true
+  }
+
+  if (cmd === '/insights') {
+    view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: '' } })
+    void showInsights()
+    return true
+  }
+
+  return false
+}
+
+async function showInsights(): Promise<void> {
+  const config = await window.api.config.get()
+  const u = insightsUsage
+  const auth = insightsAuth
+  const turnCount = insightsTurnCount
+
+  const lines: string[] = ['## Session Insights', '']
+
+  // Session info
+  const model = config?.model ?? 'unknown'
+  const effort = config?.effort ?? 'unknown'
+  const cwd = config?.cwd ?? '—'
+  lines.push(`**Working directory:** \`${cwd}\``)
+  lines.push(`**Model:** ${model}  `)
+  lines.push(`**Effort:** ${effort}  `)
+  lines.push(`**Auth:** ${auth?.label ?? config?.authMode ?? 'unknown'}  `)
+  lines.push(`**Turns this session:** ${turnCount}`)
+  lines.push('')
+
+  // Usage
+  lines.push('### Usage')
+  lines.push('')
+
+  const rows: [string, string][] = []
+
+  if (u.ctxPct !== undefined) {
+    const bar = usageBar(u.ctxPct)
+    rows.push(['Context window', `${bar} ${u.ctxPct}%`])
+  }
+
+  if (auth?.showCost && u.costUsd !== undefined) {
+    const cost = u.costUsd < 0.01 && u.costUsd > 0 ? '<$0.01' : `$${u.costUsd.toFixed(4)}`
+    rows.push(['Session cost', `~${cost}`])
+  }
+
+  if (u.fiveHourStatus !== undefined || u.fiveHourPct !== undefined) {
+    const val = u.fiveHourPct !== undefined
+      ? `${usageBar(u.fiveHourPct)} ${u.fiveHourPct}%`
+      : rateLimitSymbol(u.fiveHourStatus)
+    rows.push(['5-hour rate limit', val])
+  }
+
+  if (u.sevenDayStatus !== undefined || u.sevenDayPct !== undefined) {
+    const val = u.sevenDayPct !== undefined
+      ? `${usageBar(u.sevenDayPct)} ${u.sevenDayPct}%`
+      : rateLimitSymbol(u.sevenDayStatus)
+    rows.push(['7-day rate limit', val])
+  }
+
+  if (rows.length === 0) {
+    lines.push('_No usage data yet — send a prompt first._')
+  } else {
+    lines.push('| Metric | Value |')
+    lines.push('|--------|-------|')
+    for (const [k, v] of rows) lines.push(`| ${k} | ${v} |`)
+  }
+
+  responseView.addSystemMessage(lines.join('\n'))
+}
+
+function usageBar(pct: number): string {
+  const filled = Math.round(pct / 10)
+  return `${'█'.repeat(filled)}${'░'.repeat(10 - filled)}`
+}
+
+function rateLimitSymbol(status: string | undefined): string {
+  if (status === 'rejected') return '✗ over limit'
+  if (status === 'allowed_warning') return '! near limit'
+  return '✓ within limit'
+}
+
+function showHelpOverlay(): void {
+  const existing = document.getElementById('help-overlay')
+  if (existing) { existing.remove(); return }
+
+  const overlay = document.createElement('div')
+  overlay.id = 'help-overlay'
+  overlay.className = 'help-overlay'
+
+  const modal = document.createElement('div')
+  modal.className = 'help-modal'
+
+  const title = document.createElement('div')
+  title.className = 'help-title'
+  title.textContent = 'Claude Markdown'
+
+  const kbSection = document.createElement('div')
+  kbSection.className = 'help-section'
+  kbSection.innerHTML = `
+    <div class="help-section-title">Keybindings</div>
+    <table class="help-table">
+      <tr><td><kbd>Cmd+Enter</kbd></td><td>Send prompt</td></tr>
+      <tr><td><kbd>Enter</kbd></td><td>Newline in prompt</td></tr>
+      <tr><td><kbd>Esc</kbd></td><td>Interrupt agent</td></tr>
+      <tr><td><kbd>y</kbd> / <kbd>n</kbd></td><td>Allow / deny permission</td></tr>
+      <tr><td><kbd>1</kbd> / <kbd>2</kbd> / <kbd>3</kbd></td><td>Multi-option permission</td></tr>
+      <tr><td><kbd>Cmd+N</kbd></td><td>New window</td></tr>
+      <tr><td><kbd>Cmd+W</kbd></td><td>Close window</td></tr>
+    </table>
+  `
+
+  const cmdSection = document.createElement('div')
+  cmdSection.className = 'help-section'
+  cmdSection.innerHTML = `
+    <div class="help-section-title">Slash commands</div>
+    <table class="help-table">
+      <tr><td><code>/clear</code></td><td>New session (preserves cwd)</td></tr>
+      <tr><td><code>/help</code></td><td>Show this overlay</td></tr>
+      <tr><td><code>/cost</code></td><td>Scroll to usage stats</td></tr>
+      <tr><td><code>/model [name]</code></td><td>Change model mid-session</td></tr>
+      <tr><td><code>/effort [level]</code></td><td>Set effort (before first prompt)</td></tr>
+    </table>
+  `
+
+  const note = document.createElement('p')
+  note.className = 'help-note'
+  note.textContent = 'Skill commands (/diagnose, /grill-me, etc.) pass through to Claude.'
+
+  const closeBtn = document.createElement('button')
+  closeBtn.className = 'help-close-btn'
+  closeBtn.type = 'button'
+  closeBtn.textContent = 'Close  (Esc)'
+  closeBtn.addEventListener('click', () => overlay.remove())
+
+  modal.append(title, kbSection, cmdSection, note, closeBtn)
+  overlay.append(modal)
+  document.body.append(overlay)
+
+  overlay.addEventListener('click', (e: MouseEvent) => {
+    if (e.target === overlay) overlay.remove()
+  })
+
+  const escHandler = (e: KeyboardEvent): void => {
+    if (e.key === 'Escape') {
+      e.stopPropagation()
+      overlay.remove()
+      document.removeEventListener('keydown', escHandler)
+    }
+  }
+  document.addEventListener('keydown', escHandler)
+
+  closeBtn.focus()
+}
 
 // ── Chip label formatting ───────────────────────────────────────────────────
 

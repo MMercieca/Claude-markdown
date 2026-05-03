@@ -3,6 +3,7 @@ import type { TurnStats, LogEvent, PermissionRequest, PermissionChoice } from '.
 export interface RightPaneHandle {
   setActive(activity?: string): void
   setIdle(): void
+  clear(): void
 }
 
 export function mountRightPane(
@@ -409,6 +410,23 @@ export function mountRightPane(
   return {
     setActive(activity?: string): void { renderActive(activity) },
     setIdle(): void { renderIdle() },
+    clear(): void {
+      logEl.innerHTML = ''
+      rawEl.innerHTML = ''
+      rawEvents.length = 0
+      toolCards.clear()
+      lastStats = null
+      pendingPermissionToolId = null
+      pendingHasSuggestions = false
+      if (viewMode === 'raw') {
+        viewMode = 'structured'
+        structuredBtn.classList.add('rl-toggle-active')
+        rawBtn.classList.remove('rl-toggle-active')
+        logEl.hidden = false
+        rawEl.hidden = true
+      }
+      renderIdle()
+    },
   }
 }
 

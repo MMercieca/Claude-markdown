@@ -77,7 +77,7 @@ Adds support for **claude.ai OAuth** (Pro/Max subscription, used at home) and **
 
 ## Phase 10 — Slash commands
 
-- [ ] **33. App-intercepted allowlist: `/clear`, `/help`, `/cost`. `/insights`** `/clear` rebuilds session in same window (preserves `cwd`, defaults `model`/`effort`). `/help` overlay with keybindings. `/cost` scrolls right pane to usage. Everything else passes through to SDK unchanged.
+- [x] **33. App-intercepted allowlist: `/clear`, `/help`, `/cost`. `/insights`** `/clear` rebuilds session in same window (preserves `cwd`, defaults `model`/`effort`). `/help` overlay with keybindings. `/cost` scrolls right pane to usage. Everything else passes through to SDK unchanged.
 - [ ] **34. `/model [name]` and `/model`.** Mid-session via `setModel()`; bare form lists models in right pane.
 - [ ] **35. `/effort [level]` with lifecycle guard.** Only valid before first prompt; otherwise error message pointing to `/clear`. Verify `/effort high` → `/clear` → next `query()` carries `effort: 'high'` (one of the design's known-unknowns).
 

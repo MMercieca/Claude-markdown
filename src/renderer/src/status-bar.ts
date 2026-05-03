@@ -3,6 +3,8 @@ import type { ConfigBootstrap, EffortLevel, AuthMode, ModelOption, UsageState, A
 export interface StatusBarHandle {
   /** Switch to monitoring mode: pickers freeze, usage chips appear. Idempotent. */
   freeze(): void
+  /** Return to config mode and reset usage state. Called after /clear. */
+  unfreeze(): void
 }
 
 // Config-mode status bar. Renders `cwd | model | effort` with [change]
@@ -27,10 +29,11 @@ function modelLabel(id: string, models: ModelOption[]): string {
 
 export async function mountStatusBar(container: HTMLElement): Promise<StatusBarHandle> {
   const config = await window.api.config.get()
-  if (!config) return { freeze: () => {} }
+  if (!config) return { freeze: () => {}, unfreeze: () => {} }
 
   let current: ConfigBootstrap = config
   let frozen = false
+  let sepUsage: HTMLElement | null = null   // created in freeze(), removed in unfreeze()
   let usage: UsageState = {}
   let auth: AuthInfo | null = null
   let signInStatus: SignInStatus = { inProgress: false }
@@ -175,13 +178,26 @@ export async function mountStatusBar(container: HTMLElement): Promise<StatusBarH
       frozen = true
       container.classList.remove('status-bar-config')
       container.classList.add('status-bar-monitoring')
-      // Remove the auth picker; replace with usage chips.
       sep3.remove()
       authItem.remove()
-      const sepUsage = document.createElement('span')
+      sepUsage = document.createElement('span')
       sepUsage.className = 'sb-sep'
       sepUsage.textContent = '|'
       container.append(sepUsage, usageWrap)
+      paint()
+    },
+    unfreeze(): void {
+      if (!frozen) return
+      frozen = false
+      usage = {}
+      auth = null
+      signInStatus = { inProgress: false }
+      container.classList.remove('status-bar-monitoring')
+      container.classList.add('status-bar-config')
+      sepUsage?.remove()
+      sepUsage = null
+      usageWrap.remove()
+      container.append(sep3, authItem)
       paint()
     },
   }

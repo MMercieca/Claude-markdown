@@ -43,6 +43,7 @@ export interface RendererToMain {
   'session:send'(text: string): void
   'session:interrupt'(): void
   'session:signIn'(): void
+  'session:clear'(): void
   'session:permissionResponse'(toolId: string, choice: PermissionChoice): void
   'config:get'(): ConfigBootstrap
   'config:pickCwd'(): string | null
@@ -125,6 +126,7 @@ export interface MainToRenderer {
   'session:turnStats': TurnStats        // emitted with each result message
   'session:logEvent': LogEvent          // structured event for the right-pane log
   'session:permissionRequest': PermissionRequest  // tool permission required; agent paused
+  'session:cleared': void               // session was reset via /clear; renderer should wipe state
 }
 
 export interface RendererToSystem {

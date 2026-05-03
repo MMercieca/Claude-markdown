@@ -62,6 +62,15 @@ const api = {
     signIn: (): Promise<void> =>
       ipcRenderer.invoke('session:signIn') as Promise<void>,
 
+    clear: (): Promise<void> =>
+      ipcRenderer.invoke('session:clear') as Promise<void>,
+
+    onCleared: (cb: () => void): (() => void) => {
+      const listener = () => cb()
+      ipcRenderer.on('session:cleared', listener)
+      return () => ipcRenderer.removeListener('session:cleared', listener)
+    },
+
     onSignInStatus: (cb: (status: SignInStatus) => void): (() => void) => {
       const listener = (_e: Electron.IpcRendererEvent, status: SignInStatus) => cb(status)
       ipcRenderer.on('session:signInStatus', listener)

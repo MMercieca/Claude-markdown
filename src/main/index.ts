@@ -433,6 +433,40 @@ ipcMain.handle('session:interrupt', async (event): Promise<void> => {
   }
 })
 
+// ── Session clear handler ───────────────────────────────────────────────────
+
+ipcMain.handle('session:clear', async (event): Promise<void> => {
+  const winId = event.sender.id
+  const session = sessions.get(winId)
+  if (!session) return
+  const win = BrowserWindow.fromWebContents(event.sender)
+  if (!win) return
+
+  // Interrupt active query if any
+  if (session.activeQuery && session.activeQueryObj) {
+    await session.activeQueryObj.interrupt()
+  }
+
+  // Deny all pending permission prompts
+  for (const [, resolver] of session.pendingPermissions) resolver('deny')
+
+  // Close the prompt channel so the running query loop exits
+  session.promptChannel?.close()
+
+  // Reset session to pre-first-send state, preserving cwd and authMode
+  const defaults = await getUserSettings()
+  session.activeQuery = false
+  session.promptChannel = null
+  session.activeQueryObj = null
+  session.turnNum = 0
+  session.usage = {}
+  session.pendingPermissions = new Map()
+  session.model = defaults.model
+  session.effort = defaults.effort
+
+  win.webContents.send('session:cleared')
+})
+
 // ── Permission response handler ─────────────────────────────────────────────
 
 ipcMain.handle('session:permissionResponse', (event, toolId: string, choice: PermissionChoice): void => {

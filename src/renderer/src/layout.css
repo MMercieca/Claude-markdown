@@ -581,6 +581,15 @@ html, body {
 #response-content .turn-user th,
 #response-content .turn-user td { border-color: rgba(255, 255, 255, 0.4); }
 
+#response-content .turn-system {
+  border-left: 3px solid var(--divider-active);
+  padding-left: 12px;
+  opacity: 0.85;
+}
+
+#response-content .turn-system > :first-child { margin-top: 0; }
+#response-content .turn-system > :last-child  { margin-bottom: 0; }
+
 #response-content .streaming-text {
   white-space: pre-wrap;
   font-family: inherit;
@@ -792,3 +801,95 @@ html, body {
     --bubble-fg: #ffffff;
   }
 }
+
+/* ── /help overlay ── */
+
+.help-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.help-modal {
+  background: var(--bg);
+  border: 1px solid var(--divider);
+  border-radius: 8px;
+  padding: 20px 24px;
+  min-width: 380px;
+  max-width: 480px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+}
+
+.help-title {
+  font-size: 15px;
+  font-weight: 600;
+  opacity: 0.9;
+}
+
+.help-section-title {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.45;
+  margin-bottom: 6px;
+}
+
+.help-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 12px;
+}
+
+.help-table td {
+  padding: 3px 0;
+  vertical-align: top;
+}
+
+.help-table td:first-child {
+  white-space: nowrap;
+  padding-right: 16px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  opacity: 0.75;
+}
+
+.help-table kbd {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  background: var(--divider);
+  border-radius: 3px;
+  padding: 1px 4px;
+}
+
+.help-table code {
+  font-size: 11px;
+  background: var(--divider);
+  border-radius: 3px;
+  padding: 1px 4px;
+}
+
+.help-note {
+  font-size: 11px;
+  opacity: 0.5;
+  margin: 0;
+}
+
+.help-close-btn {
+  align-self: flex-end;
+  background: transparent;
+  border: 1px solid var(--divider);
+  border-radius: 4px;
+  padding: 4px 12px;
+  font: inherit;
+  font-size: 12px;
+  color: inherit;
+  cursor: pointer;
+}
+
+.help-close-btn:hover { background: var(--divider); }

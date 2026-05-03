@@ -78,6 +78,7 @@ export type TurnSegment =
 export type Turn =
   | { role: 'user'; text: string }
   | { role: 'assistant'; segments: TurnSegment[]; interrupted?: boolean }
+  | { role: 'system'; markdown: string }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -205,6 +206,14 @@ function Transcript({ turns, activeTurn, authError, onDismissAuthError }: Props)
                 {turn.text}
               </ReactMarkdown>
             </div>
+          ) : turn.role === 'system' ? (
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              rehypePlugins={[rehypeHighlight]}
+              components={markdownComponents}
+            >
+              {turn.markdown}
+            </ReactMarkdown>
           ) : (
             <>
               <AssistantSegments segments={turn.segments} />
@@ -319,4 +328,16 @@ export class ResponseView {
 
   finishAssistantTurn(): void { this.freezeActiveTurn(false) }
   markInterrupted(): void    { this.freezeActiveTurn(true) }
+
+  addSystemMessage(markdown: string): void {
+    this.turns.push({ role: 'system', markdown })
+    this.render()
+  }
+
+  clear(): void {
+    this.turns = []
+    this.activeTurn = null
+    this.authError = null
+    this.render()
+  }
 }
