@@ -172,6 +172,40 @@ const editor = new EditorView({
   parent: promptEditorEl,
 })
 
+// ── File drag-and-drop ──────────────────────────────────────────────────────
+
+editor.dom.addEventListener('dragover', (e: DragEvent) => {
+  if (e.dataTransfer?.types.includes('Files')) {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'copy'
+  }
+})
+
+editor.dom.addEventListener('drop', (e: DragEvent) => {
+  const files = e.dataTransfer?.files
+  if (!files?.length) return
+  e.preventDefault()
+  e.stopPropagation()
+
+  const links: string[] = []
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i]!
+    const absPath = window.api.getFilePath(file)
+    if (!absPath) continue
+    links.push(`[${file.name}](${absPath})`)
+  }
+
+  if (links.length === 0) return
+
+  const insert = links.join(' ')
+  const { from } = editor.state.selection.main
+  editor.dispatch({
+    changes: { from, insert },
+    selection: { anchor: from + insert.length },
+  })
+  editor.focus()
+})
+
 // ── Session streaming ───────────────────────────────────────────────────────
 
 window.api.session.onDelta((delta) => {

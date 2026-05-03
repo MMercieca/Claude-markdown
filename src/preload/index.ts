@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type { LayoutState, ConfigBootstrap, EffortLevel, AuthMode, UsageState, AuthInfo, SignInStatus, AuthError, TurnStats, LogEvent, PermissionRequest, PermissionChoice } from '../shared/ipc'
 
 // Ergonomic nested API exposed to the renderer. Each method wraps
@@ -112,6 +112,8 @@ const api = {
     openUrl: (url: string): Promise<void> =>
       ipcRenderer.invoke('system:openUrl', url) as Promise<void>,
   },
+
+  getFilePath: (file: File): string => webUtils.getPathForFile(file),
 } as const
 
 contextBridge.exposeInMainWorld('api', api)

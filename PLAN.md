@@ -88,7 +88,7 @@ Adds support for **claude.ai OAuth** (Pro/Max subscription, used at home) and **
 
 ## Phase 12 — Attachments
 
-- [ ] **38. File drag-and-drop → Markdown link insert.** `[foo.ts](/abs/path)`.
+- [x] **38. File drag-and-drop → Markdown link insert.** `[foo.ts](/abs/path)`.
 - [ ] **39. Image paste → chip → image content block.** Placeholder chip in editor; on Send becomes an Anthropic `image` block; rendered into the transcript.
 - [ ] **40. Reject oversized / over-count.** >5MB or >100 images → explicit error before Send; prompt not cleared.
 
