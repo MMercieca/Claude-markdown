@@ -43,6 +43,7 @@ export interface RendererToMain {
   'session:send'(text: string): void
   'session:interrupt'(): void
   'session:signIn'(): void
+  'session:permissionResponse'(toolId: string, allow: boolean): void
   'config:get'(): ConfigBootstrap
   'config:pickCwd'(): string | null
   'config:setModel'(model: string): void
@@ -90,6 +91,14 @@ export interface TurnStats {
   model: string
 }
 
+export interface PermissionRequest {
+  toolId: string          // toolUseID from SDK
+  toolName: string
+  inputJson?: string      // pretty-printed tool input
+  title?: string          // SDK-provided prompt sentence, e.g. "Claude wants to run npm test"
+  description?: string    // SDK-provided subtitle
+}
+
 export type LogEventKind = 'turn_start' | 'tool_call' | 'tool_result' | 'assistant_text'
 
 export interface LogEvent {
@@ -112,6 +121,7 @@ export interface MainToRenderer {
   'session:authError': AuthError | null  // null = dismiss the banner
   'session:turnStats': TurnStats        // emitted with each result message
   'session:logEvent': LogEvent          // structured event for the right-pane log
+  'session:permissionRequest': PermissionRequest  // tool permission required; agent paused
 }
 
 export interface RendererToSystem {

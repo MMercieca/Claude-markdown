@@ -1,4 +1,4 @@
-import type { TurnStats, LogEvent } from '../../shared/ipc'
+import type { TurnStats, LogEvent, PermissionRequest } from '../../shared/ipc'
 
 export interface RightPaneHandle {
   setActive(activity?: string): void
@@ -255,6 +255,108 @@ export function mountRightPane(
     } else if (ev.kind === 'assistant_text') {
       appendTextChip(ev)
     }
+  })
+
+  // ── Permission modal ────────────────────────────────────────────────────────
+
+  let pendingPermissionToolId: string | null = null
+
+  function resolvePermission(toolId: string, allow: boolean): void {
+    if (toolId !== pendingPermissionToolId) return
+    pendingPermissionToolId = null
+
+    const card = logEl.querySelector<HTMLElement>(`.rl-permission-card[data-tool-id="${CSS.escape(toolId)}"]`)
+    if (card) {
+      const actions = card.querySelector<HTMLElement>('.rl-perm-actions')
+      if (actions) {
+        actions.innerHTML = ''
+        const decision = document.createElement('span')
+        decision.className = `rl-perm-decision ${allow ? 'rl-perm-allowed' : 'rl-perm-denied'}`
+        decision.textContent = allow ? '✓ Allowed' : '✗ Denied'
+        actions.append(decision)
+      }
+      card.classList.add(allow ? 'rl-permission-allowed' : 'rl-permission-denied')
+    }
+
+    renderActive()
+    void window.api.session.permissionResponse(toolId, allow)
+  }
+
+  document.addEventListener('keydown', (e: KeyboardEvent) => {
+    if (!pendingPermissionToolId) return
+    if (e.key === 'y' || e.key === 'Y') {
+      e.preventDefault()
+      resolvePermission(pendingPermissionToolId, true)
+    } else if (e.key === 'n' || e.key === 'N') {
+      e.preventDefault()
+      resolvePermission(pendingPermissionToolId, false)
+    }
+  })
+
+  window.api.session.onPermissionRequest((req: PermissionRequest) => {
+    pendingPermissionToolId = req.toolId
+    renderActive(`Awaiting permission for ${req.toolName}…`)
+
+    const card = document.createElement('div')
+    card.className = 'rl-permission-card'
+    card.dataset.toolId = req.toolId
+
+    const header = document.createElement('div')
+    header.className = 'rl-perm-header'
+
+    const icon = document.createElement('span')
+    icon.className = 'rl-perm-icon'
+    icon.textContent = '🔐'
+
+    const nameSpan = document.createElement('span')
+    nameSpan.className = 'rl-perm-name'
+    nameSpan.textContent = req.toolName
+
+    const badge = document.createElement('span')
+    badge.className = 'rl-perm-badge'
+    badge.textContent = 'permission required'
+
+    header.append(icon, nameSpan, badge)
+
+    const body = document.createElement('div')
+    body.className = 'rl-perm-body'
+
+    if (req.title) {
+      const titleEl = document.createElement('div')
+      titleEl.className = 'rl-perm-title'
+      titleEl.textContent = req.title
+      body.append(titleEl)
+    }
+
+    if (req.description) {
+      const descEl = document.createElement('div')
+      descEl.className = 'rl-perm-desc'
+      descEl.textContent = req.description
+      body.append(descEl)
+    }
+
+    const actions = document.createElement('div')
+    actions.className = 'rl-perm-actions'
+
+    const allowBtn = document.createElement('button')
+    allowBtn.className = 'rl-perm-btn rl-perm-allow-btn'
+    allowBtn.type = 'button'
+    allowBtn.textContent = 'Allow  (y)'
+    allowBtn.addEventListener('click', () => resolvePermission(req.toolId, true))
+
+    const denyBtn = document.createElement('button')
+    denyBtn.className = 'rl-perm-btn rl-perm-deny-btn'
+    denyBtn.type = 'button'
+    denyBtn.textContent = 'Deny  (n)'
+    denyBtn.addEventListener('click', () => resolvePermission(req.toolId, false))
+
+    actions.append(allowBtn, denyBtn)
+    body.append(actions)
+    card.append(header, body)
+
+    logEl.append(card)
+    logEl.scrollTop = logEl.scrollHeight
+    allowBtn.focus()
   })
 
   return {

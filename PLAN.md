@@ -72,7 +72,7 @@ Adds support for **claude.ai OAuth** (Pro/Max subscription, used at home) and **
 ## Phase 9 — Permissions
 
 - [x] **30. `canUseTool` with auto-allowlist.** `Read/Glob/Grep/WebFetch/WebSearch` pass through silently; everything else denied for now (so the modal is the next commit, not a regression).
-- [ ] **31. Permission modal as right-pane card.** `[Allow] [Deny]` + `y`/`n` keystrokes; auto-focus when shown; agent paused until resolved. Inherit `~/.claude/settings.json` rules — only prompt for items not pre-allowed.
+- [x] **31. Permission modal as right-pane card.** `[Allow] [Deny]` + `y`/`n` keystrokes; auto-focus when shown; agent paused until resolved. Inherit `~/.claude/settings.json` rules — only prompt for items not pre-allowed.
 - [ ] **32. Multi-option flows.** `1`/`2`/`3` for "allow once / allow session / deny" when SDK offers options.
 
 ## Phase 10 — Slash commands

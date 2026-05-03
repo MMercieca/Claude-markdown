@@ -251,6 +251,109 @@ html, body {
   opacity: 0.85;
 }
 
+/* ── Permission card ── */
+
+.rl-permission-card {
+  margin: 4px 8px;
+  border: 1px solid #b45309;
+  border-radius: 5px;
+  font-size: 12px;
+  overflow: hidden;
+}
+
+@media (prefers-color-scheme: dark) {
+  .rl-permission-card { border-color: #d97706; }
+}
+
+.rl-permission-card.rl-permission-allowed { border-color: #1a7f37; opacity: 0.7; }
+.rl-permission-card.rl-permission-denied  { border-color: #cf222e; opacity: 0.7; }
+
+@media (prefers-color-scheme: dark) {
+  .rl-permission-card.rl-permission-allowed { border-color: #3fb950; }
+  .rl-permission-card.rl-permission-denied  { border-color: #f85149; }
+}
+
+.rl-perm-header {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 8px;
+  background: rgba(180, 83, 9, 0.08);
+}
+
+@media (prefers-color-scheme: dark) {
+  .rl-perm-header { background: rgba(217, 119, 6, 0.12); }
+}
+
+.rl-perm-icon { font-size: 11px; flex-shrink: 0; }
+.rl-perm-name { font-weight: 600; flex: 1; }
+.rl-perm-badge {
+  font-size: 9px;
+  opacity: 0.6;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.rl-perm-body {
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  border-top: 1px solid var(--divider);
+}
+
+.rl-perm-title {
+  font-size: 11px;
+  opacity: 0.8;
+}
+
+.rl-perm-desc {
+  font-size: 10px;
+  opacity: 0.55;
+}
+
+.rl-perm-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 2px;
+  align-items: center;
+}
+
+.rl-perm-btn {
+  background: transparent;
+  border: 1px solid var(--divider);
+  border-radius: 4px;
+  padding: 3px 10px;
+  font: inherit;
+  font-size: 11px;
+  color: inherit;
+  cursor: pointer;
+}
+
+.rl-perm-allow-btn { border-color: #1a7f37; color: #1a7f37; }
+.rl-perm-deny-btn  { border-color: #cf222e; color: #cf222e; }
+
+@media (prefers-color-scheme: dark) {
+  .rl-perm-allow-btn { border-color: #3fb950; color: #3fb950; }
+  .rl-perm-deny-btn  { border-color: #f85149; color: #f85149; }
+}
+
+.rl-perm-allow-btn:hover { background: rgba(26, 127, 55, 0.1); }
+.rl-perm-deny-btn:hover  { background: rgba(207, 34, 46, 0.1); }
+
+.rl-perm-decision {
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.rl-perm-allowed { color: #1a7f37; }
+.rl-perm-denied  { color: #cf222e; }
+
+@media (prefers-color-scheme: dark) {
+  .rl-perm-allowed { color: #3fb950; }
+  .rl-perm-denied  { color: #f85149; }
+}
+
 /* ── Left column: status-bar | response-pane | row-divider | prompt-pane ── */
 
 #status-bar {

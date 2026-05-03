@@ -17,6 +17,7 @@ import type {
   AuthError,
   TurnStats,
   LogEvent,
+  PermissionRequest,
 } from '../shared/ipc'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -71,6 +72,7 @@ interface SessionState {
   authMode: AuthMode
   turnNum: number                   // incremented on each session:send
   usage: UsageState                 // last-known usage; rate-limit fields persist across turns
+  pendingPermissions: Map<string, (allow: boolean) => void>  // toolUseID → resolver
 }
 
 const sessions = new Map<number, SessionState>()
@@ -117,6 +119,7 @@ function isEffort(v: unknown): v is EffortLevel {
 interface UserSettings {
   model: string
   effort: EffortLevel
+  allowedTools: string[]  // from permissions.allow in ~/.claude/settings.json
 }
 
 async function readUserSettings(): Promise<UserSettings> {
@@ -124,15 +127,21 @@ async function readUserSettings(): Promise<UserSettings> {
     const raw = await readFile(join(homedir(), '.claude', 'settings.json'), 'utf-8')
     const parsed: unknown = JSON.parse(raw)
     if (parsed === null || typeof parsed !== 'object') {
-      return { model: SDK_DEFAULT_MODEL, effort: SDK_DEFAULT_EFFORT }
+      return { model: SDK_DEFAULT_MODEL, effort: SDK_DEFAULT_EFFORT, allowedTools: [] }
     }
     const obj = parsed as Record<string, unknown>
+    const perms = obj['permissions'] as Record<string, unknown> | undefined
+    const allowRaw = perms?.['allow']
+    const allowedTools = Array.isArray(allowRaw)
+      ? allowRaw.filter((x): x is string => typeof x === 'string')
+      : []
     return {
       model: typeof obj['model'] === 'string' ? obj['model'] : SDK_DEFAULT_MODEL,
       effort: isEffort(obj['effort']) ? obj['effort'] : SDK_DEFAULT_EFFORT,
+      allowedTools,
     }
   } catch {
-    return { model: SDK_DEFAULT_MODEL, effort: SDK_DEFAULT_EFFORT }
+    return { model: SDK_DEFAULT_MODEL, effort: SDK_DEFAULT_EFFORT, allowedTools: [] }
   }
 }
 
@@ -208,14 +217,44 @@ function emitToolResults(win: BrowserWindow, msg: SDKUserMessage): void {
 }
 
 // ── Tool permissions ────────────────────────────────────────────────────────
-// Step 30: auto-allowlist passes silently; everything else denied.
-// Step 31 will replace the deny branch with a user-facing modal.
 
 const AUTO_ALLOW_TOOLS = new Set(['Read', 'Glob', 'Grep', 'WebFetch', 'WebSearch'])
 
-async function canUseTool(toolName: string): Promise<PermissionResult> {
-  if (AUTO_ALLOW_TOOLS.has(toolName)) return { behavior: 'allow' }
-  return { behavior: 'deny', message: `Tool "${toolName}" requires permission (not yet implemented).` }
+function makeCanUseTool(
+  session: SessionState,
+  win: BrowserWindow,
+  settingsAllowlist: Set<string>,
+): (toolName: string, input: Record<string, unknown>, opts: { signal: AbortSignal; toolUseID: string; title?: string; description?: string }) => Promise<PermissionResult> {
+  return async (toolName, input, opts) => {
+    if (AUTO_ALLOW_TOOLS.has(toolName) || settingsAllowlist.has(toolName)) {
+      return { behavior: 'allow' }
+    }
+
+    let resolvePermission!: (allow: boolean) => void
+    const permissionPromise = new Promise<boolean>(resolve => { resolvePermission = resolve })
+    session.pendingPermissions.set(opts.toolUseID, resolvePermission)
+
+    opts.signal.addEventListener('abort', () => {
+      if (session.pendingPermissions.delete(opts.toolUseID)) resolvePermission(false)
+    }, { once: true })
+
+    let inputJson: string | undefined
+    try { inputJson = JSON.stringify(input, null, 2) } catch { /* leave undefined */ }
+
+    const req: PermissionRequest = {
+      toolId: opts.toolUseID,
+      toolName,
+      inputJson,
+      title: opts.title,
+      description: opts.description,
+    }
+    win.webContents.send('session:permissionRequest', req)
+
+    const allow = await permissionPromise
+    session.pendingPermissions.delete(opts.toolUseID)
+    if (allow) return { behavior: 'allow' }
+    return { behavior: 'deny', message: `Permission denied for ${toolName}.` }
+  }
 }
 
 // ── Persistent query loop ───────────────────────────────────────────────────
@@ -227,6 +266,8 @@ async function runQueryLoop(
   win: BrowserWindow,
   channel: PromptChannel,
 ): Promise<void> {
+  const userSettings = await getUserSettings()
+  const settingsAllowlist = new Set(userSettings.allowedTools)
   const q = query({
     prompt: channel,
     options: {
@@ -234,7 +275,7 @@ async function runQueryLoop(
       cwd: session.cwd,
       model: session.model,
       effort: session.effort,
-      canUseTool,
+      canUseTool: makeCanUseTool(session, win, settingsAllowlist),
     },
   })
   session.activeQueryObj = q
@@ -379,6 +420,18 @@ ipcMain.handle('session:interrupt', async (event): Promise<void> => {
     session.activeQuery = false
     const win = BrowserWindow.fromWebContents(event.sender)
     win?.webContents.send('session:done')
+  }
+})
+
+// ── Permission response handler ─────────────────────────────────────────────
+
+ipcMain.handle('session:permissionResponse', (event, toolId: string, allow: boolean): void => {
+  const session = sessions.get(event.sender.id)
+  if (!session) return
+  const resolver = session.pendingPermissions.get(toolId)
+  if (resolver) {
+    session.pendingPermissions.delete(toolId)
+    resolver(allow)
   }
 })
 
@@ -563,6 +616,7 @@ async function createWindow(): Promise<void> {
     authMode: defaultAuthMode(),
     turnNum: 0,
     usage: {},
+    pendingPermissions: new Map(),
   })
 
   win.on('closed', () => {
