@@ -469,16 +469,13 @@ ipcMain.handle('session:clear', async (event): Promise<void> => {
   // Close the prompt channel so the running query loop exits
   session.promptChannel?.close()
 
-  // Reset session to pre-first-send state, preserving cwd and authMode
-  const defaults = await getUserSettings()
+  // Reset runtime state; preserve window-level config (cwd, model, effort, authMode)
   session.activeQuery = false
   session.promptChannel = null
   session.activeQueryObj = null
   session.turnNum = 0
   session.usage = {}
   session.pendingPermissions = new Map()
-  session.model = defaults.model
-  session.effort = defaults.effort
 
   win.webContents.send('session:cleared')
 })

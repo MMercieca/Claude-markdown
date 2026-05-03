@@ -7,6 +7,8 @@ export interface StatusBarHandle {
   unfreeze(): void
   /** Update the displayed model after a mid-session /model change. */
   setModel(model: string): void
+  /** Update the displayed effort after a /effort change. */
+  setEffort(effort: EffortLevel): void
 }
 
 // Config-mode status bar. Renders `cwd | model | effort` with [change]
@@ -31,7 +33,7 @@ function modelLabel(id: string, models: ModelOption[]): string {
 
 export async function mountStatusBar(container: HTMLElement): Promise<StatusBarHandle> {
   const config = await window.api.config.get()
-  if (!config) return { freeze: () => {}, unfreeze: () => {}, setModel: () => {} }
+  if (!config) return { freeze: () => {}, unfreeze: () => {}, setModel: () => {}, setEffort: () => {} }
 
   let current: ConfigBootstrap = config
   let frozen = false
@@ -204,6 +206,10 @@ export async function mountStatusBar(container: HTMLElement): Promise<StatusBarH
     },
     setModel(model: string): void {
       current = { ...current, model }
+      paint()
+    },
+    setEffort(effort: EffortLevel): void {
+      current = { ...current, effort }
       paint()
     },
   }

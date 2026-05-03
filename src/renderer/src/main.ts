@@ -269,7 +269,49 @@ function handleSlashCommand(text: string, view: EditorView): boolean {
     return true
   }
 
+  if (cmd === '/effort') {
+    view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: '' } })
+    handleEffortCommand(text)
+    return true
+  }
+
   return false
+}
+
+function handleEffortCommand(text: string): void {
+  const parts = text.trim().split(/\s+/)
+
+  if (parts.length === 1) {
+    // Bare /effort — show available levels
+    const levels = ['low', 'medium', 'high', 'xhigh', 'max']
+    responseView.addSystemMessage(
+      `**Available effort levels:** ${levels.map((l) => `\`${l}\``).join(', ')}`
+    )
+    return
+  }
+
+  // /effort <level> is only valid before the first prompt
+  if (insightsTurnCount > 0) {
+    responseView.addSystemMessage(
+      '**/effort** is only valid before the first prompt.\n\nUse **/clear** to start a new session, then **/effort <level>**.'
+    )
+    return
+  }
+
+  const level = parts[1]!.toLowerCase()
+  const valid = ['low', 'medium', 'high', 'xhigh', 'max']
+  if (!valid.includes(level)) {
+    responseView.addSystemMessage(
+      `**Unknown effort level:** \`${level}\`\n\nAvailable: ${valid.map((l) => `\`${l}\``).join(', ')}`
+    )
+    return
+  }
+
+  void (async () => {
+    await window.api.config.setEffort(level as Parameters<typeof window.api.config.setEffort>[0])
+    void statusBarReady.then((sb) => sb.setEffort(level as Parameters<typeof window.api.config.setEffort>[0]))
+    responseView.addSystemMessage(`Effort set to **${level}**`)
+  })()
 }
 
 async function handleModelCommand(text: string): Promise<void> {
