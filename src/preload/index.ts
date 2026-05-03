@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { LayoutState, ConfigBootstrap, EffortLevel, AuthMode, UsageState, AuthInfo, SignInStatus, AuthError, TurnStats, LogEvent, PermissionRequest } from '../shared/ipc'
+import type { LayoutState, ConfigBootstrap, EffortLevel, AuthMode, UsageState, AuthInfo, SignInStatus, AuthError, TurnStats, LogEvent, PermissionRequest, PermissionChoice } from '../shared/ipc'
 
 // Ergonomic nested API exposed to the renderer. Each method wraps
 // ipcRenderer.invoke so the renderer never sees ipcRenderer directly.
@@ -92,8 +92,8 @@ const api = {
       return () => ipcRenderer.removeListener('session:permissionRequest', listener)
     },
 
-    permissionResponse: (toolId: string, allow: boolean): Promise<void> =>
-      ipcRenderer.invoke('session:permissionResponse', toolId, allow) as Promise<void>,
+    permissionResponse: (toolId: string, choice: PermissionChoice): Promise<void> =>
+      ipcRenderer.invoke('session:permissionResponse', toolId, choice) as Promise<void>,
   },
 
   system: {
@@ -105,4 +105,4 @@ const api = {
 contextBridge.exposeInMainWorld('api', api)
 
 export type Api = typeof api
-export type { LayoutState, ConfigBootstrap, EffortLevel, AuthMode, UsageState, AuthInfo, SignInStatus, AuthError, TurnStats, LogEvent, PermissionRequest }
+export type { LayoutState, ConfigBootstrap, EffortLevel, AuthMode, UsageState, AuthInfo, SignInStatus, AuthError, TurnStats, LogEvent, PermissionRequest, PermissionChoice }

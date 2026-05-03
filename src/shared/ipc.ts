@@ -43,7 +43,7 @@ export interface RendererToMain {
   'session:send'(text: string): void
   'session:interrupt'(): void
   'session:signIn'(): void
-  'session:permissionResponse'(toolId: string, allow: boolean): void
+  'session:permissionResponse'(toolId: string, choice: PermissionChoice): void
   'config:get'(): ConfigBootstrap
   'config:pickCwd'(): string | null
   'config:setModel'(model: string): void
@@ -91,12 +91,15 @@ export interface TurnStats {
   model: string
 }
 
+export type PermissionChoice = 'allow_once' | 'allow_session' | 'deny'
+
 export interface PermissionRequest {
   toolId: string          // toolUseID from SDK
   toolName: string
   inputJson?: string      // pretty-printed tool input
   title?: string          // SDK-provided prompt sentence, e.g. "Claude wants to run npm test"
   description?: string    // SDK-provided subtitle
+  hasSuggestions: boolean // whether SDK provided session-persistence suggestions
 }
 
 export type LogEventKind = 'turn_start' | 'tool_call' | 'tool_result' | 'assistant_text'

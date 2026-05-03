@@ -1,4 +1,4 @@
-import type { TurnStats, LogEvent, PermissionRequest } from '../../shared/ipc'
+import type { TurnStats, LogEvent, PermissionRequest, PermissionChoice } from '../../shared/ipc'
 
 export interface RightPaneHandle {
   setActive(activity?: string): void
@@ -260,10 +260,18 @@ export function mountRightPane(
   // ── Permission modal ────────────────────────────────────────────────────────
 
   let pendingPermissionToolId: string | null = null
+  let pendingHasSuggestions = false
 
-  function resolvePermission(toolId: string, allow: boolean): void {
+  const CHOICE_LABELS: Record<PermissionChoice, string> = {
+    allow_once:    '✓ Allowed once',
+    allow_session: '✓ Allowed for session',
+    deny:          '✗ Denied',
+  }
+
+  function resolvePermission(toolId: string, choice: PermissionChoice): void {
     if (toolId !== pendingPermissionToolId) return
     pendingPermissionToolId = null
+    pendingHasSuggestions = false
 
     const card = logEl.querySelector<HTMLElement>(`.rl-permission-card[data-tool-id="${CSS.escape(toolId)}"]`)
     if (card) {
@@ -271,30 +279,41 @@ export function mountRightPane(
       if (actions) {
         actions.innerHTML = ''
         const decision = document.createElement('span')
-        decision.className = `rl-perm-decision ${allow ? 'rl-perm-allowed' : 'rl-perm-denied'}`
-        decision.textContent = allow ? '✓ Allowed' : '✗ Denied'
+        decision.className = `rl-perm-decision ${choice === 'deny' ? 'rl-perm-denied' : 'rl-perm-allowed'}`
+        decision.textContent = CHOICE_LABELS[choice]
         actions.append(decision)
       }
-      card.classList.add(allow ? 'rl-permission-allowed' : 'rl-permission-denied')
+      card.classList.add(choice === 'deny' ? 'rl-permission-denied' : 'rl-permission-allowed')
     }
 
     renderActive()
-    void window.api.session.permissionResponse(toolId, allow)
+    void window.api.session.permissionResponse(toolId, choice)
   }
 
   document.addEventListener('keydown', (e: KeyboardEvent) => {
     if (!pendingPermissionToolId) return
+    const id = pendingPermissionToolId
     if (e.key === 'y' || e.key === 'Y') {
       e.preventDefault()
-      resolvePermission(pendingPermissionToolId, true)
+      resolvePermission(id, 'allow_once')
     } else if (e.key === 'n' || e.key === 'N') {
       e.preventDefault()
-      resolvePermission(pendingPermissionToolId, false)
+      resolvePermission(id, 'deny')
+    } else if (e.key === '1') {
+      e.preventDefault()
+      resolvePermission(id, 'allow_once')
+    } else if (e.key === '2' && pendingHasSuggestions) {
+      e.preventDefault()
+      resolvePermission(id, 'allow_session')
+    } else if (e.key === '3') {
+      e.preventDefault()
+      resolvePermission(id, 'deny')
     }
   })
 
   window.api.session.onPermissionRequest((req: PermissionRequest) => {
     pendingPermissionToolId = req.toolId
+    pendingHasSuggestions = req.hasSuggestions
     renderActive(`Awaiting permission for ${req.toolName}…`)
 
     const card = document.createElement('div')
@@ -338,25 +357,53 @@ export function mountRightPane(
     const actions = document.createElement('div')
     actions.className = 'rl-perm-actions'
 
-    const allowBtn = document.createElement('button')
-    allowBtn.className = 'rl-perm-btn rl-perm-allow-btn'
-    allowBtn.type = 'button'
-    allowBtn.textContent = 'Allow  (y)'
-    allowBtn.addEventListener('click', () => resolvePermission(req.toolId, true))
+    if (req.hasSuggestions) {
+      // 3-option flow: allow once / allow session / deny
+      const onceBtn = document.createElement('button')
+      onceBtn.className = 'rl-perm-btn rl-perm-allow-btn'
+      onceBtn.type = 'button'
+      onceBtn.textContent = '1 · Allow once'
+      onceBtn.addEventListener('click', () => resolvePermission(req.toolId, 'allow_once'))
 
-    const denyBtn = document.createElement('button')
-    denyBtn.className = 'rl-perm-btn rl-perm-deny-btn'
-    denyBtn.type = 'button'
-    denyBtn.textContent = 'Deny  (n)'
-    denyBtn.addEventListener('click', () => resolvePermission(req.toolId, false))
+      const sessionBtn = document.createElement('button')
+      sessionBtn.className = 'rl-perm-btn rl-perm-allow-btn'
+      sessionBtn.type = 'button'
+      sessionBtn.textContent = '2 · Allow session'
+      sessionBtn.addEventListener('click', () => resolvePermission(req.toolId, 'allow_session'))
 
-    actions.append(allowBtn, denyBtn)
-    body.append(actions)
-    card.append(header, body)
+      const denyBtn = document.createElement('button')
+      denyBtn.className = 'rl-perm-btn rl-perm-deny-btn'
+      denyBtn.type = 'button'
+      denyBtn.textContent = '3 · Deny'
+      denyBtn.addEventListener('click', () => resolvePermission(req.toolId, 'deny'))
 
-    logEl.append(card)
-    logEl.scrollTop = logEl.scrollHeight
-    allowBtn.focus()
+      actions.append(onceBtn, sessionBtn, denyBtn)
+      body.append(actions)
+      card.append(header, body)
+      logEl.append(card)
+      logEl.scrollTop = logEl.scrollHeight
+      onceBtn.focus()
+    } else {
+      // 2-option flow: allow / deny
+      const allowBtn = document.createElement('button')
+      allowBtn.className = 'rl-perm-btn rl-perm-allow-btn'
+      allowBtn.type = 'button'
+      allowBtn.textContent = 'Allow  (y)'
+      allowBtn.addEventListener('click', () => resolvePermission(req.toolId, 'allow_once'))
+
+      const denyBtn = document.createElement('button')
+      denyBtn.className = 'rl-perm-btn rl-perm-deny-btn'
+      denyBtn.type = 'button'
+      denyBtn.textContent = 'Deny  (n)'
+      denyBtn.addEventListener('click', () => resolvePermission(req.toolId, 'deny'))
+
+      actions.append(allowBtn, denyBtn)
+      body.append(actions)
+      card.append(header, body)
+      logEl.append(card)
+      logEl.scrollTop = logEl.scrollHeight
+      allowBtn.focus()
+    }
   })
 
   return {

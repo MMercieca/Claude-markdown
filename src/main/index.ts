@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { homedir } from 'node:os'
 import { query } from '@anthropic-ai/claude-agent-sdk'
-import type { SDKUserMessage, SDKRateLimitInfo, Query, SDKAssistantMessage, PermissionResult } from '@anthropic-ai/claude-agent-sdk'
+import type { SDKUserMessage, SDKRateLimitInfo, Query, SDKAssistantMessage, CanUseTool } from '@anthropic-ai/claude-agent-sdk'
 import type {
   LayoutState,
   EffortLevel,
@@ -18,6 +18,7 @@ import type {
   TurnStats,
   LogEvent,
   PermissionRequest,
+  PermissionChoice,
 } from '../shared/ipc'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -72,7 +73,7 @@ interface SessionState {
   authMode: AuthMode
   turnNum: number                   // incremented on each session:send
   usage: UsageState                 // last-known usage; rate-limit fields persist across turns
-  pendingPermissions: Map<string, (allow: boolean) => void>  // toolUseID → resolver
+  pendingPermissions: Map<string, (choice: PermissionChoice) => void>  // toolUseID → resolver
 }
 
 const sessions = new Map<number, SessionState>()
@@ -224,18 +225,20 @@ function makeCanUseTool(
   session: SessionState,
   win: BrowserWindow,
   settingsAllowlist: Set<string>,
-): (toolName: string, input: Record<string, unknown>, opts: { signal: AbortSignal; toolUseID: string; title?: string; description?: string }) => Promise<PermissionResult> {
+): CanUseTool {
   return async (toolName, input, opts) => {
     if (AUTO_ALLOW_TOOLS.has(toolName) || settingsAllowlist.has(toolName)) {
       return { behavior: 'allow' }
     }
 
-    let resolvePermission!: (allow: boolean) => void
-    const permissionPromise = new Promise<boolean>(resolve => { resolvePermission = resolve })
+    const { suggestions } = opts
+
+    let resolvePermission!: (choice: PermissionChoice) => void
+    const permissionPromise = new Promise<PermissionChoice>(resolve => { resolvePermission = resolve })
     session.pendingPermissions.set(opts.toolUseID, resolvePermission)
 
     opts.signal.addEventListener('abort', () => {
-      if (session.pendingPermissions.delete(opts.toolUseID)) resolvePermission(false)
+      if (session.pendingPermissions.delete(opts.toolUseID)) resolvePermission('deny')
     }, { once: true })
 
     let inputJson: string | undefined
@@ -247,13 +250,20 @@ function makeCanUseTool(
       inputJson,
       title: opts.title,
       description: opts.description,
+      hasSuggestions: suggestions !== undefined && suggestions.length > 0,
     }
     win.webContents.send('session:permissionRequest', req)
 
-    const allow = await permissionPromise
+    const choice = await permissionPromise
     session.pendingPermissions.delete(opts.toolUseID)
-    if (allow) return { behavior: 'allow' }
-    return { behavior: 'deny', message: `Permission denied for ${toolName}.` }
+
+    if (choice === 'deny') {
+      return { behavior: 'deny', message: `Permission denied for ${toolName}.`, decisionClassification: 'user_reject' }
+    }
+    if (choice === 'allow_session' && suggestions !== undefined && suggestions.length > 0) {
+      return { behavior: 'allow', updatedPermissions: suggestions, decisionClassification: 'user_permanent' }
+    }
+    return { behavior: 'allow', decisionClassification: 'user_temporary' }
   }
 }
 
@@ -425,13 +435,13 @@ ipcMain.handle('session:interrupt', async (event): Promise<void> => {
 
 // ── Permission response handler ─────────────────────────────────────────────
 
-ipcMain.handle('session:permissionResponse', (event, toolId: string, allow: boolean): void => {
+ipcMain.handle('session:permissionResponse', (event, toolId: string, choice: PermissionChoice): void => {
   const session = sessions.get(event.sender.id)
   if (!session) return
   const resolver = session.pendingPermissions.get(toolId)
   if (resolver) {
     session.pendingPermissions.delete(toolId)
-    resolver(allow)
+    resolver(choice)
   }
 })
 
