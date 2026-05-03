@@ -41,6 +41,7 @@ export interface RendererToMain {
   'layout:load'(): LayoutState | null
   'layout:save'(state: LayoutState): void
   'session:send'(text: string): void
+  'session:sendContent'(text: string, images: SerializedImage[]): void
   'session:interrupt'(): void
   'session:signIn'(): void
   'session:clear'(): void
@@ -51,6 +52,16 @@ export interface RendererToMain {
   'config:setModel'(model: string): void
   'config:setEffort'(effort: EffortLevel): void
   'config:setAuthMode'(mode: AuthMode): void
+}
+
+export type ImageMediaType = 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp'
+
+export interface SerializedImage {
+  mimeType: ImageMediaType
+  base64Data: string
+  width: number
+  height: number
+  dataUrl: string
 }
 
 export type RateLimitStatus = 'allowed' | 'allowed_warning' | 'rejected'

@@ -19,7 +19,12 @@ import type {
   LogEvent,
   PermissionRequest,
   PermissionChoice,
+  SerializedImage,
 } from '../shared/ipc'
+
+type ContentBlock =
+  | { type: 'text'; text: string }
+  | { type: 'image'; source: { type: 'base64'; media_type: string; data: string } }
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -37,6 +42,17 @@ class PromptChannel implements AsyncIterable<SDKUserMessage> {
     this.queue.push({
       type: 'user',
       message: { role: 'user', content: text },
+      parent_tool_use_id: null,
+    })
+    this.waiters.shift()?.()
+  }
+
+  pushBlocks(blocks: ContentBlock[]): void {
+    this.queue.push({
+      type: 'user',
+      // The Anthropic API accepts content block arrays; SDK type declares string
+      // but accepts arrays at runtime.
+      message: { role: 'user', content: blocks as unknown as string },
       parent_tool_use_id: null,
     })
     this.waiters.shift()?.()
@@ -564,6 +580,39 @@ ipcMain.handle('session:send', (event, text: string): void => {
   }
 
   session.promptChannel.push(text)
+})
+
+// ── Session sendContent handler ─────────────────────────────────────────────
+
+ipcMain.handle('session:sendContent', (event, text: string, images: SerializedImage[]): void => {
+  const winId = event.sender.id
+  const session = sessions.get(winId)
+  if (!session || session.activeQuery) return
+
+  const win = BrowserWindow.fromWebContents(event.sender)
+  if (!win) return
+
+  session.activeQuery = true
+  session.turnNum++
+  const turnStartEvent: LogEvent = { kind: 'turn_start', turnNum: session.turnNum }
+  win.webContents.send('session:logEvent', turnStartEvent)
+
+  if (session.promptChannel === null) {
+    const channel = new PromptChannel()
+    session.promptChannel = channel
+    void runQueryLoop(session, win, channel)
+  }
+
+  const blocks: ContentBlock[] = [
+    ...images.map((img) => ({
+      type: 'image' as const,
+      source: { type: 'base64' as const, media_type: img.mimeType, data: img.base64Data },
+    })),
+  ]
+  const trimmed = text.trim()
+  if (trimmed) blocks.push({ type: 'text', text: trimmed })
+
+  session.promptChannel.pushBlocks(blocks)
 })
 
 // ── System IPC handlers ─────────────────────────────────────────────────────

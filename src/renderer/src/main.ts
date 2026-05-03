@@ -8,7 +8,7 @@ import 'highlight.js/styles/github.css'
 import { ResponseView } from './response'
 import { mountStatusBar } from './status-bar'
 import { mountRightPane } from './right-pane'
-import type { UsageState, AuthInfo } from '../../shared/ipc'
+import type { UsageState, AuthInfo, SerializedImage, ImageMediaType } from '../../shared/ipc'
 
 const leftCol = document.getElementById('left-col') as HTMLElement
 const responsePane = document.getElementById('response-pane') as HTMLElement
@@ -114,6 +114,36 @@ const markdownColors = HighlightStyle.define([
   { tag: tags.url,       color: '#0969da' },
 ])
 
+// ── Pasted image store ──────────────────────────────────────────────────────
+
+interface PastedImage extends SerializedImage {
+  id: string
+}
+
+const pastedImages = new Map<string, PastedImage>()
+let imageCounter = 0
+
+const IMAGE_RE = /\[image-(\d+): \d+×\d+\]/g
+
+function extractImages(text: string): { sendText: string; sendImages: SerializedImage[] } {
+  const sendImages: SerializedImage[] = []
+  const sendText = text.replace(IMAGE_RE, (_, num: string) => {
+    const id = `image-${num}`
+    const img = pastedImages.get(id)
+    if (img) {
+      sendImages.push({
+        mimeType: img.mimeType,
+        base64Data: img.base64Data,
+        width: img.width,
+        height: img.height,
+        dataUrl: img.dataUrl,
+      })
+    }
+    return ''
+  })
+  return { sendText, sendImages }
+}
+
 const editableCompartment = new Compartment()
 
 // Tracks whether the agent is currently generating.
@@ -138,18 +168,27 @@ const editor = new EditorView({
       Prec.highest(keymap.of([{
         key: 'Mod-Enter',
         run: (view): boolean => {
-          const text = view.state.doc.toString().trim()
-          if (!text) return true
-          if (handleSlashCommand(text, view)) return true
+          const rawText = view.state.doc.toString().trim()
+          if (!rawText) return true
+          if (handleSlashCommand(rawText, view)) return true
+
+          const { sendText, sendImages } = extractImages(rawText)
+          const textToSend = sendText.trim()
+
           view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: '' } })
           view.dispatch({ effects: editableCompartment.reconfigure(EditorView.editable.of(false)) })
           agentActive = true
           insightsTurnCount++
           rightPane.setActive()
-          responseView.addUserTurn(text)
+          responseView.addUserTurn(textToSend, sendImages.length > 0 ? sendImages : undefined)
           responseView.startAssistantTurn()
           void statusBarReady.then((sb) => sb.freeze())
-          void window.api.session.send(text)
+
+          if (sendImages.length > 0) {
+            void window.api.session.sendContent(textToSend, sendImages)
+          } else {
+            void window.api.session.send(textToSend)
+          }
           return true
         },
       }])),
@@ -206,6 +245,45 @@ editor.dom.addEventListener('drop', (e: DragEvent) => {
   editor.focus()
 })
 
+// ── Image paste ─────────────────────────────────────────────────────────────
+
+promptEditorEl.addEventListener('paste', (e: ClipboardEvent) => {
+  if (!e.clipboardData) return
+  const imageItems = Array.from(e.clipboardData.items).filter((item) =>
+    item.type.startsWith('image/')
+  )
+  if (imageItems.length === 0) return
+
+  e.preventDefault()
+
+  for (const item of imageItems) {
+    const file = item.getAsFile()
+    if (!file) continue
+
+    const id = `image-${++imageCounter}`
+    const mimeType = file.type as ImageMediaType
+
+    const reader = new FileReader()
+    reader.onload = () => {
+      const dataUrl = reader.result as string
+      const base64Data = dataUrl.slice(dataUrl.indexOf(',') + 1)
+      const img = new Image()
+      img.onload = () => {
+        pastedImages.set(id, { id, dataUrl, mimeType, base64Data, width: img.naturalWidth, height: img.naturalHeight })
+        const placeholder = `[${id}: ${img.naturalWidth}×${img.naturalHeight}]`
+        const { from } = editor.state.selection.main
+        editor.dispatch({
+          changes: { from, insert: placeholder },
+          selection: { anchor: from + placeholder.length },
+        })
+        editor.focus()
+      }
+      img.src = dataUrl
+    }
+    reader.readAsDataURL(file)
+  }
+}, { capture: true })
+
 // ── Session streaming ───────────────────────────────────────────────────────
 
 window.api.session.onDelta((delta) => {
@@ -251,6 +329,8 @@ window.api.session.onCleared(() => {
   insightsAuth = null
   insightsTurnCount = 0
   agentActive = false
+  pastedImages.clear()
+  imageCounter = 0
   setEditorEditable(true)
   editor.focus()
 })

@@ -598,6 +598,21 @@ html, body {
   max-width: 75%;
 }
 
+.user-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.user-image-thumb {
+  max-width: 200px;
+  max-height: 150px;
+  border-radius: 6px;
+  object-fit: contain;
+  display: block;
+}
+
 /* Tighten the first/last child margins so the bubble hugs the content. */
 #response-content .turn-user .user-text > :first-child { margin-top: 0; }
 #response-content .turn-user .user-text > :last-child  { margin-bottom: 0; }

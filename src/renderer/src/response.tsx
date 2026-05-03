@@ -3,7 +3,7 @@ import { useEffect, useRef, useState, type ComponentPropsWithoutRef } from 'reac
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeHighlight from 'rehype-highlight'
-import type { AuthError } from '../../shared/ipc'
+import type { AuthError, SerializedImage } from '../../shared/ipc'
 
 function CodeBlock({ children, ...props }: ComponentPropsWithoutRef<'pre'>): React.JSX.Element {
   const preRef = useRef<HTMLPreElement>(null)
@@ -76,7 +76,7 @@ export type TurnSegment =
   | { kind: 'chip'; chip: ToolChip }
 
 export type Turn =
-  | { role: 'user'; text: string }
+  | { role: 'user'; text: string; images?: SerializedImage[] }
   | { role: 'assistant'; segments: TurnSegment[]; interrupted?: boolean }
   | { role: 'system'; markdown: string }
 
@@ -198,13 +198,22 @@ function Transcript({ turns, activeTurn, authError, onDismissAuthError }: Props)
         <div key={i} className={`turn turn-${turn.role}`}>
           {turn.role === 'user' ? (
             <div className="user-text">
-              <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                rehypePlugins={[rehypeHighlight]}
-                components={markdownComponents}
-              >
-                {turn.text}
-              </ReactMarkdown>
+              {turn.images && turn.images.length > 0 && (
+                <div className="user-images">
+                  {turn.images.map((img, j) => (
+                    <img key={j} src={img.dataUrl} alt="Attached image" className="user-image-thumb" />
+                  ))}
+                </div>
+              )}
+              {turn.text && (
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  rehypePlugins={[rehypeHighlight]}
+                  components={markdownComponents}
+                >
+                  {turn.text}
+                </ReactMarkdown>
+              )}
             </div>
           ) : turn.role === 'system' ? (
             <ReactMarkdown
@@ -278,8 +287,8 @@ export class ResponseView {
     this.render()
   }
 
-  addUserTurn(text: string): void {
-    this.turns.push({ role: 'user', text })
+  addUserTurn(text: string, images?: SerializedImage[]): void {
+    this.turns.push({ role: 'user', text, images })
     this.render()
   }
 
