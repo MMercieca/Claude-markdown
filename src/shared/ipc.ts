@@ -42,6 +42,7 @@ export interface RendererToMain {
   'layout:save'(state: LayoutState): void
   'session:send'(text: string): void
   'session:sendContent'(text: string, images: SerializedImage[]): void
+  'session:retry'(): void
   'session:interrupt'(): void
   'session:signIn'(): void
   'session:clear'(): void
@@ -95,6 +96,14 @@ export interface AuthError {
   message: string
 }
 
+export interface BlockingError {
+  message: string
+  /** whether [Retry] should be shown */
+  retryable: boolean
+  /** ms timestamp of quota reset; drives countdown when present */
+  quotaResetAt?: number
+}
+
 export interface TurnStats {
   inputTokens: number
   outputTokens: number
@@ -136,6 +145,7 @@ export interface MainToRenderer {
   'session:auth': AuthInfo    // one-time auth mode signal after accountInfo() resolves
   'session:signInStatus': SignInStatus  // progress/result of claude.ai OAuth sign-in
   'session:authError': AuthError | null  // null = dismiss the banner
+  'session:blockingError': BlockingError | null  // null = dismiss the banner
   'session:turnStats': TurnStats        // emitted with each result message
   'session:logEvent': LogEvent          // structured event for the right-pane log
   'session:permissionRequest': PermissionRequest  // tool permission required; agent paused

@@ -15,6 +15,7 @@ import type {
   AuthInfo,
   SignInStatus,
   AuthError,
+  BlockingError,
   TurnStats,
   LogEvent,
   PermissionRequest,
@@ -91,6 +92,7 @@ interface SessionState {
   usage: UsageState                 // last-known usage; rate-limit fields persist across turns
   pendingPermissions: Map<string, (choice: PermissionChoice) => void>  // toolUseID → resolver
   deniedToolIds: Set<string>  // tools the user denied; used to suppress error styling
+  lastSentText: string | null  // saved for retry after a blocking error
 }
 
 const sessions = new Map<number, SessionState>()
@@ -288,6 +290,40 @@ function makeCanUseTool(
   }
 }
 
+// ── Error classification ────────────────────────────────────────────────────
+
+function classifyBlockingError(err: unknown): BlockingError {
+  const e = err as { status?: number; message?: string; headers?: { get?: (k: string) => string | null } }
+  const message = e.message ?? String(err)
+  const status = e.status
+
+  if (status === 429) {
+    let quotaResetAt: number | undefined
+    try {
+      const retryAfter = e.headers?.get?.('retry-after')
+      if (retryAfter) {
+        const secs = parseFloat(retryAfter)
+        if (!isNaN(secs) && secs > 0) quotaResetAt = Date.now() + secs * 1000
+      }
+    } catch { /* ignore */ }
+    return {
+      message: 'Rate limit reached. Please wait before retrying.',
+      retryable: quotaResetAt === undefined,
+      quotaResetAt,
+    }
+  }
+
+  if (status !== undefined && status >= 500) {
+    return { message: `Server error (${status}): ${message}`, retryable: true }
+  }
+
+  if (status !== undefined && status >= 400) {
+    return { message: `API error (${status}): ${message}`, retryable: false }
+  }
+
+  return { message: `Connection error: ${message}`, retryable: true }
+}
+
 // ── Persistent query loop ───────────────────────────────────────────────────
 // Runs once per window, started on the first session:send.
 // Streams deltas to the renderer; fires session:done after each assistant turn.
@@ -428,9 +464,12 @@ async function runQueryLoop(
     }
   } catch (err) {
     console.error('[session] Query loop error:', err)
-    if (!win.isDestroyed() && session.activeQuery) {
-      session.activeQuery = false
-      win.webContents.send('session:done')
+    if (!win.isDestroyed()) {
+      win.webContents.send('session:blockingError', classifyBlockingError(err))
+      if (session.activeQuery) {
+        session.activeQuery = false
+        win.webContents.send('session:done')
+      }
     }
   } finally {
     session.activeQueryObj = null
@@ -498,6 +537,7 @@ ipcMain.handle('session:clear', async (event): Promise<void> => {
   session.usage = {}
   session.pendingPermissions = new Map()
   session.deniedToolIds = new Set()
+  session.lastSentText = null
 
   win.webContents.send('session:cleared')
 })
@@ -585,6 +625,7 @@ ipcMain.handle('session:send', (event, text: string): void => {
     void runQueryLoop(session, win, channel)
   }
 
+  session.lastSentText = text
   session.promptChannel.push(text)
 })
 
@@ -618,7 +659,49 @@ ipcMain.handle('session:sendContent', (event, text: string, images: SerializedIm
   const trimmed = text.trim()
   if (trimmed) blocks.push({ type: 'text', text: trimmed })
 
+  session.lastSentText = trimmed || null
   session.promptChannel.pushBlocks(blocks)
+})
+
+// ── Session retry handler ───────────────────────────────────────────────────
+
+ipcMain.handle('session:retry', async (event): Promise<void> => {
+  const winId = event.sender.id
+  const session = sessions.get(winId)
+  if (!session) return
+  const win = BrowserWindow.fromWebContents(event.sender)
+  if (!win) return
+
+  const textToRetry = session.lastSentText
+
+  // Deny pending permissions; close the (dead) channel
+  for (const [, resolver] of session.pendingPermissions) resolver('deny')
+  session.promptChannel?.close()
+
+  // Reset session state
+  session.activeQuery = false
+  session.promptChannel = null
+  session.activeQueryObj = null
+  session.turnNum = 0
+  session.usage = {}
+  session.pendingPermissions = new Map()
+  session.deniedToolIds = new Set()
+  session.lastSentText = null
+
+  win.webContents.send('session:cleared')
+
+  if (textToRetry) {
+    session.activeQuery = true
+    session.turnNum++
+    win.webContents.send('session:logEvent', { kind: 'turn_start', turnNum: session.turnNum } satisfies LogEvent)
+    const channel = new PromptChannel()
+    session.promptChannel = channel
+    void runQueryLoop(session, win, channel)
+    session.lastSentText = textToRetry
+    channel.push(textToRetry)
+  } else {
+    win.webContents.send('session:done')
+  }
 })
 
 // ── System IPC handlers ─────────────────────────────────────────────────────
@@ -730,6 +813,7 @@ async function createWindow(): Promise<void> {
     usage: {},
     pendingPermissions: new Map(),
     deniedToolIds: new Set(),
+    lastSentText: null,
   })
 
   win.on('closed', () => {

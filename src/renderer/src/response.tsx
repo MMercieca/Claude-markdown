@@ -3,7 +3,7 @@ import { useEffect, useRef, useState, type ComponentPropsWithoutRef } from 'reac
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeHighlight from 'rehype-highlight'
-import type { AuthError, SerializedImage } from '../../shared/ipc'
+import type { AuthError, BlockingError, SerializedImage } from '../../shared/ipc'
 
 function CodeBlock({ children, ...props }: ComponentPropsWithoutRef<'pre'>): React.JSX.Element {
   const preRef = useRef<HTMLPreElement>(null)
@@ -123,6 +123,61 @@ function AuthBanner({ error, onDismiss }: { error: AuthError; onDismiss: () => v
   )
 }
 
+function formatCountdown(seconds: number): string {
+  const h = Math.floor(seconds / 3600)
+  const m = Math.floor((seconds % 3600) / 60)
+  const s = seconds % 60
+  if (h > 0) return `${h}h ${m}m`
+  if (m > 0) return `${m}m ${s}s`
+  return `${s}s`
+}
+
+function BlockingErrorBanner({
+  error,
+  onDismiss,
+  onRetry,
+}: {
+  error: BlockingError
+  onDismiss: () => void
+  onRetry: () => void
+}): React.JSX.Element {
+  const [secondsLeft, setSecondsLeft] = useState<number | null>(
+    error.quotaResetAt !== undefined
+      ? Math.max(0, Math.ceil((error.quotaResetAt - Date.now()) / 1000))
+      : null
+  )
+
+  useEffect(() => {
+    if (error.quotaResetAt === undefined) return
+    const id = setInterval(() => {
+      setSecondsLeft(Math.max(0, Math.ceil((error.quotaResetAt! - Date.now()) / 1000)))
+    }, 1000)
+    return () => clearInterval(id)
+  }, [error.quotaResetAt])
+
+  const canRetry = error.retryable || (secondsLeft !== null && secondsLeft <= 0)
+  const displayMessage =
+    secondsLeft !== null && secondsLeft > 0
+      ? `${error.message} Resets in ${formatCountdown(secondsLeft)}.`
+      : error.message
+
+  return (
+    <div className="blocking-error-banner" role="alert">
+      <span className="blocking-error-msg">{displayMessage}</span>
+      <span className="blocking-error-actions">
+        {canRetry && (
+          <button className="blocking-error-action" type="button" onClick={onRetry}>
+            Retry
+          </button>
+        )}
+        <button className="blocking-error-dismiss" type="button" onClick={onDismiss}>
+          Dismiss
+        </button>
+      </span>
+    </div>
+  )
+}
+
 function closeOpenFence(buf: string): string {
   const fenceLines = buf.match(/^```/gm)?.length ?? 0
   return fenceLines % 2 === 1 ? buf + '\n```' : buf
@@ -177,9 +232,12 @@ interface Props {
   activeTurn: ActiveTurnState | null
   authError: AuthError | null
   onDismissAuthError: () => void
+  blockingError: BlockingError | null
+  onDismissBlockingError: () => void
+  onRetry: () => void
 }
 
-function Transcript({ turns, activeTurn, authError, onDismissAuthError }: Props): React.JSX.Element {
+function Transcript({ turns, activeTurn, authError, onDismissAuthError, blockingError, onDismissBlockingError, onRetry }: Props): React.JSX.Element {
   const endRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -193,6 +251,7 @@ function Transcript({ turns, activeTurn, authError, onDismissAuthError }: Props)
 
   return (
     <>
+      {blockingError && <BlockingErrorBanner error={blockingError} onDismiss={onDismissBlockingError} onRetry={onRetry} />}
       {authError && <AuthBanner error={authError} onDismiss={onDismissAuthError} />}
       {turns.map((turn, i) => (
         <div key={i} className={`turn turn-${turn.role}`}>
@@ -262,6 +321,7 @@ export class ResponseView {
     chipMap: Map<string, ToolChip>
   } | null = null
   private authError: AuthError | null = null
+  private blockingError: BlockingError | null = null
 
   constructor(container: HTMLElement) {
     this.root = createRoot(container)
@@ -278,8 +338,16 @@ export class ResponseView {
         activeTurn={activeTurnState}
         authError={this.authError}
         onDismissAuthError={() => { this.authError = null; this.render() }}
+        blockingError={this.blockingError}
+        onDismissBlockingError={() => { this.blockingError = null; this.render() }}
+        onRetry={() => { this.blockingError = null; void window.api.session.retry(); this.render() }}
       />
     )
+  }
+
+  showBlockingError(error: BlockingError | null): void {
+    this.blockingError = error
+    this.render()
   }
 
   showAuthError(error: AuthError | null): void {
@@ -347,6 +415,7 @@ export class ResponseView {
     this.turns = []
     this.activeTurn = null
     this.authError = null
+    this.blockingError = null
     this.render()
   }
 }

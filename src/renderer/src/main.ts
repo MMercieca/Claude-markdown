@@ -347,6 +347,7 @@ window.api.session.onSignInStatus((status) => {
 
 window.api.session.onUsage((u) => { insightsUsage = { ...insightsUsage, ...u } })
 window.api.session.onAuth((a) => { insightsAuth = a })
+window.api.session.onBlockingError((error) => { responseView.showBlockingError(error) })
 
 window.api.session.onCleared(() => {
   responseView.clear()

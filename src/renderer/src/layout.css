@@ -528,6 +528,52 @@ html, body {
   padding: 12px;
 }
 
+.blocking-error-banner {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  border-radius: 6px;
+  background: rgba(180, 83, 9, 0.08);
+  border: 1px solid rgba(180, 83, 9, 0.3);
+  font-size: 12px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .blocking-error-banner {
+    background: rgba(217, 119, 6, 0.1);
+    border-color: rgba(217, 119, 6, 0.3);
+  }
+}
+
+.blocking-error-msg { flex: 1; min-width: 0; }
+
+.blocking-error-actions {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.blocking-error-action,
+.blocking-error-dismiss {
+  background: transparent;
+  border: 1px solid var(--divider);
+  border-radius: 4px;
+  padding: 2px 8px;
+  font: inherit;
+  font-size: 11px;
+  color: inherit;
+  cursor: pointer;
+}
+
+.blocking-error-action:hover,
+.blocking-error-dismiss:hover { background: var(--divider); }
+
+.blocking-error-dismiss { opacity: 0.6; }
+
 .auth-banner {
   display: flex;
   align-items: baseline;

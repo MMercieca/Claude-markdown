@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
-import type { LayoutState, ConfigBootstrap, EffortLevel, AuthMode, UsageState, AuthInfo, SignInStatus, AuthError, TurnStats, LogEvent, PermissionRequest, PermissionChoice, SerializedImage } from '../shared/ipc'
+import type { LayoutState, ConfigBootstrap, EffortLevel, AuthMode, UsageState, AuthInfo, SignInStatus, AuthError, BlockingError, TurnStats, LogEvent, PermissionRequest, PermissionChoice, SerializedImage } from '../shared/ipc'
 
 // Ergonomic nested API exposed to the renderer. Each method wraps
 // ipcRenderer.invoke so the renderer never sees ipcRenderer directly.
@@ -34,6 +34,15 @@ const api = {
 
     sendContent: (text: string, images: SerializedImage[]): Promise<void> =>
       ipcRenderer.invoke('session:sendContent', text, images) as Promise<void>,
+
+    retry: (): Promise<void> =>
+      ipcRenderer.invoke('session:retry') as Promise<void>,
+
+    onBlockingError: (cb: (error: BlockingError | null) => void): (() => void) => {
+      const listener = (_e: Electron.IpcRendererEvent, error: BlockingError | null) => cb(error)
+      ipcRenderer.on('session:blockingError', listener)
+      return () => ipcRenderer.removeListener('session:blockingError', listener)
+    },
 
     interrupt: (): Promise<void> =>
       ipcRenderer.invoke('session:interrupt') as Promise<void>,
@@ -122,4 +131,4 @@ const api = {
 contextBridge.exposeInMainWorld('api', api)
 
 export type Api = typeof api
-export type { LayoutState, ConfigBootstrap, EffortLevel, AuthMode, UsageState, AuthInfo, SignInStatus, AuthError, TurnStats, LogEvent, PermissionRequest, PermissionChoice, SerializedImage }
+export type { LayoutState, ConfigBootstrap, EffortLevel, AuthMode, UsageState, AuthInfo, SignInStatus, AuthError, BlockingError, TurnStats, LogEvent, PermissionRequest, PermissionChoice, SerializedImage }
