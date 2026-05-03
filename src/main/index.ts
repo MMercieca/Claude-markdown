@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { homedir } from 'node:os'
 import { query } from '@anthropic-ai/claude-agent-sdk'
-import type { SDKUserMessage, SDKRateLimitInfo, Query, SDKAssistantMessage } from '@anthropic-ai/claude-agent-sdk'
+import type { SDKUserMessage, SDKRateLimitInfo, Query, SDKAssistantMessage, PermissionResult } from '@anthropic-ai/claude-agent-sdk'
 import type {
   LayoutState,
   EffortLevel,
@@ -207,6 +207,17 @@ function emitToolResults(win: BrowserWindow, msg: SDKUserMessage): void {
   }
 }
 
+// ── Tool permissions ────────────────────────────────────────────────────────
+// Step 30: auto-allowlist passes silently; everything else denied.
+// Step 31 will replace the deny branch with a user-facing modal.
+
+const AUTO_ALLOW_TOOLS = new Set(['Read', 'Glob', 'Grep', 'WebFetch', 'WebSearch'])
+
+async function canUseTool(toolName: string): Promise<PermissionResult> {
+  if (AUTO_ALLOW_TOOLS.has(toolName)) return { behavior: 'allow' }
+  return { behavior: 'deny', message: `Tool "${toolName}" requires permission (not yet implemented).` }
+}
+
 // ── Persistent query loop ───────────────────────────────────────────────────
 // Runs once per window, started on the first session:send.
 // Streams deltas to the renderer; fires session:done after each assistant turn.
@@ -223,6 +234,7 @@ async function runQueryLoop(
       cwd: session.cwd,
       model: session.model,
       effort: session.effort,
+      canUseTool,
     },
   })
   session.activeQueryObj = q
