@@ -107,7 +107,7 @@ Adds support for **claude.ai OAuth** (Pro/Max subscription, used at home) and **
 
 ## Phase 15 — Smoke tests for the known unknowns (optional)
 
-- [ ] **48. Verify user-level `CLAUDE.md` loads** with `settingSources: ['user','project','local']`.
+- [x] **48. Verify user-level `CLAUDE.md` loads** with `settingSources: ['user','project','local']`.
 - [ ] **49. Force a mid-stream compaction** to confirm divider rendering doesn't corrupt a partial assistant message; fix if needed.
 ---
 

@@ -367,6 +367,7 @@ async function runQueryLoop(
       cwd: session.cwd,
       model: session.model,
       effort: session.effort,
+      settingSources: ['user', 'project', 'local'],
       canUseTool: makeCanUseTool(session, win, settingsAllowlist),
       onElicitation: async (request) => {
         if (request.mode === 'url' && request.url) {
