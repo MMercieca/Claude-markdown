@@ -20,6 +20,7 @@ const responseView = new ResponseView(responseContent)
 const statusBarReady = mountStatusBar(statusBar)
 const promptPane = document.getElementById('prompt-pane') as HTMLElement
 const promptEditorEl = document.getElementById('prompt-editor') as HTMLElement
+const sendBtn = document.getElementById('send-btn') as HTMLButtonElement
 const colDivider = document.getElementById('col-divider') as HTMLElement
 const rowDivider = document.getElementById('row-divider') as HTMLElement
 
@@ -161,47 +162,52 @@ const rightPane = mountRightPane(rightHeader, rightLog, () => {
   void window.api.session.interrupt()
 })
 
+let editor: EditorView
+
 function setEditorEditable(editable: boolean): void {
   editor.dispatch({ effects: editableCompartment.reconfigure(EditorView.editable.of(editable)) })
+  sendBtn.disabled = !editable
 }
 
-const editor = new EditorView({
+function submitPrompt(): boolean {
+  const rawText = editor.state.doc.toString().trim()
+  if (!rawText) return false
+  if (handleSlashCommand(rawText, editor)) return true
+
+  const { sendText, sendImages } = extractImages(rawText)
+
+  if (sendImages.length > MAX_IMAGE_COUNT) {
+    responseView.addSystemMessage(
+      `**Too many images:** this prompt contains ${sendImages.length} images (limit is ${MAX_IMAGE_COUNT}). Remove some before sending.`
+    )
+    return true
+  }
+
+  const textToSend = sendText.trim()
+
+  editor.dispatch({ changes: { from: 0, to: editor.state.doc.length, insert: '' } })
+  editor.dispatch({ effects: editableCompartment.reconfigure(EditorView.editable.of(false)) })
+  agentActive = true
+  insightsTurnCount++
+  rightPane.setActive()
+  responseView.addUserTurn(textToSend, sendImages.length > 0 ? sendImages : undefined)
+  responseView.startAssistantTurn()
+  void statusBarReady.then((sb) => sb.freeze())
+
+  if (sendImages.length > 0) {
+    void window.api.session.sendContent(textToSend, sendImages)
+  } else {
+    void window.api.session.send(textToSend)
+  }
+  return true
+}
+
+editor = new EditorView({
   state: EditorState.create({
     extensions: [
       Prec.highest(keymap.of([{
         key: 'Mod-Enter',
-        run: (view): boolean => {
-          const rawText = view.state.doc.toString().trim()
-          if (!rawText) return true
-          if (handleSlashCommand(rawText, view)) return true
-
-          const { sendText, sendImages } = extractImages(rawText)
-
-          if (sendImages.length > MAX_IMAGE_COUNT) {
-            responseView.addSystemMessage(
-              `**Too many images:** this prompt contains ${sendImages.length} images (limit is ${MAX_IMAGE_COUNT}). Remove some before sending.`
-            )
-            return true
-          }
-
-          const textToSend = sendText.trim()
-
-          view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: '' } })
-          view.dispatch({ effects: editableCompartment.reconfigure(EditorView.editable.of(false)) })
-          agentActive = true
-          insightsTurnCount++
-          rightPane.setActive()
-          responseView.addUserTurn(textToSend, sendImages.length > 0 ? sendImages : undefined)
-          responseView.startAssistantTurn()
-          void statusBarReady.then((sb) => sb.freeze())
-
-          if (sendImages.length > 0) {
-            void window.api.session.sendContent(textToSend, sendImages)
-          } else {
-            void window.api.session.send(textToSend)
-          }
-          return true
-        },
+        run: (): boolean => submitPrompt(),
       }])),
       history(),
       keymap.of([...defaultKeymap, ...historyKeymap]),
@@ -221,6 +227,8 @@ const editor = new EditorView({
   }),
   parent: promptEditorEl,
 })
+
+sendBtn.addEventListener('click', () => { submitPrompt(); editor.focus() })
 
 // ── File drag-and-drop ──────────────────────────────────────────────────────
 

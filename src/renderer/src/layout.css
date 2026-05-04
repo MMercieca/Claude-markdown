@@ -733,17 +733,7 @@ html, body {
 #response-content .turn-user .user-text > :first-child { margin-top: 0; }
 #response-content .turn-user .user-text > :last-child  { margin-bottom: 0; }
 
-/* Markdown elements that need contrast tweaks inside the blue bubble. */
 #response-content .turn-user a { color: inherit; text-decoration: underline; }
-#response-content .turn-user :not(pre) > code {
-  background: rgba(255, 255, 255, 0.2);
-  color: inherit;
-}
-#response-content .turn-user pre { background: rgba(0, 0, 0, 0.25); }
-#response-content .turn-user pre code { color: var(--bubble-fg); }
-#response-content .turn-user blockquote { border-left-color: rgba(255, 255, 255, 0.4); }
-#response-content .turn-user th,
-#response-content .turn-user td { border-color: rgba(255, 255, 255, 0.4); }
 
 #response-content .turn-system {
   border-left: 3px solid var(--divider-active);
@@ -901,11 +891,7 @@ html, body {
 
 #response-content .code-copy-btn:hover { opacity: 1; }
 
-#response-content .turn-user .code-copy-btn {
-  background: rgba(255, 255, 255, 0.2);
-  color: var(--bubble-fg);
-  border-color: rgba(255, 255, 255, 0.4);
-}
+
 #response-content pre code {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.9em;
@@ -928,7 +914,31 @@ html, body {
   min-height: 0;
   overflow: hidden;
   display: flex;
+  position: relative;
 }
+
+#send-btn {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 14px;
+  border: none;
+  background: var(--accent);
+  color: var(--accent-fg);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  opacity: 0.85;
+  transition: opacity 80ms;
+}
+
+#send-btn:hover { opacity: 1; }
+#send-btn:disabled { opacity: 0.3; cursor: default; }
 
 /* ── CodeMirror editor in prompt pane ── */
 
@@ -973,8 +983,10 @@ html, body {
   --fg: #1a1a1a;
   --divider: #e0e0e0;
   --divider-active: #0066cc;
-  --bubble-bg: #007aff;
-  --bubble-fg: #ffffff;
+  --bubble-bg: rgba(0, 0, 0, 0.06);
+  --bubble-fg: #1a1a1a;
+  --accent: #007aff;
+  --accent-fg: #ffffff;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -983,8 +995,10 @@ html, body {
     --fg: #d4d4d4;
     --divider: #3a3a3a;
     --divider-active: #4d9fff;
-    --bubble-bg: #0a84ff;
-    --bubble-fg: #ffffff;
+    --bubble-bg: rgba(255, 255, 255, 0.08);
+    --bubble-fg: #d4d4d4;
+    --accent: #0a84ff;
+    --accent-fg: #ffffff;
   }
 }
 
