@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain, nativeTheme, dialog, shell, Menu, MenuItem } from 'electron'
 import { readFile, writeFile, mkdir } from 'node:fs/promises'
+import { exec } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { homedir } from 'node:os'
@@ -142,6 +143,7 @@ interface UserSettings {
   model: string
   effort: EffortLevel
   allowedTools: string[]  // from permissions.allow in ~/.claude/settings.json
+  statusLine?: string     // optional shell command whose stdout is shown in the status bar
 }
 
 let cachedUserSettings: UserSettings | null = null
@@ -181,6 +183,7 @@ async function getUserSettings(): Promise<UserSettings> {
       model: typeof obj['model'] === 'string' ? obj['model'] : SDK_DEFAULT_MODEL,
       effort: isEffort(obj['effort']) ? obj['effort'] : SDK_DEFAULT_EFFORT,
       allowedTools,
+      statusLine: typeof obj['statusLine'] === 'string' ? obj['statusLine'] : undefined,
     }
     return cachedUserSettings
   } catch (err) {
@@ -844,6 +847,23 @@ ipcMain.handle('config:reloadSettings', async (event): Promise<void> => {
   }
 })
 
+// ── Status-line shell-out ───────────────────────────────────────────────────
+// Opt-in via `statusLine` key in ~/.claude/settings.json. Runs the command
+// every 5 s and broadcasts trimmed stdout to every open window.
+
+function startStatusLinePolling(cmd: string): void {
+  const run = (): void => {
+    exec(cmd, { timeout: 4000 }, (_err, stdout) => {
+      const text = stdout.trim()
+      for (const win of BrowserWindow.getAllWindows()) {
+        if (!win.isDestroyed()) win.webContents.send('session:statusLine', text)
+      }
+    })
+  }
+  run()
+  setInterval(run, 5000)
+}
+
 // ── Application menu ────────────────────────────────────────────────────────
 // Sets up the macOS application menu with New Window in the Window submenu.
 // role:'windowMenu' causes Electron to call [NSApp setWindowsMenu:] so macOS
@@ -938,8 +958,10 @@ async function createWindow(): Promise<void> {
 
 // ── App lifecycle ───────────────────────────────────────────────────────────
 
-void app.whenReady().then(() => {
+void app.whenReady().then(async () => {
   buildAppMenu()
+  const settings = await getUserSettings()
+  if (settings.statusLine) startStatusLinePolling(settings.statusLine)
   void createWindow()
 
   app.on('activate', () => {

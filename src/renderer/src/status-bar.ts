@@ -56,6 +56,11 @@ export async function mountStatusBar(container: HTMLElement): Promise<StatusBarH
   const usageWrap = document.createElement('span')
   usageWrap.className = 'sb-usage'
 
+  // Status-line chip — always in the DOM, pushed far right by CSS order.
+  const statusLineEl = document.createElement('span')
+  statusLineEl.className = 'sb-statusline'
+  statusLineEl.style.display = 'none'
+
   for (const sep of [sep1, sep2, sep3]) {
     sep.className = 'sb-sep'
     sep.textContent = '|'
@@ -103,7 +108,7 @@ export async function mountStatusBar(container: HTMLElement): Promise<StatusBarH
   }
 
   paint()
-  container.append(cwdItem, sep1, modelItem, sep2, effortItem, sep3, authItem)
+  container.append(cwdItem, sep1, modelItem, sep2, effortItem, sep3, authItem, statusLineEl)
 
   cwdItem.addEventListener('click', async () => {
     if (frozen) return
@@ -174,6 +179,11 @@ export async function mountStatusBar(container: HTMLElement): Promise<StatusBarH
   window.api.session.onAuth((a) => {
     auth = a
     if (frozen) paintUsage()
+  })
+
+  window.api.session.onStatusLine((text) => {
+    statusLineEl.textContent = text
+    statusLineEl.style.display = text ? '' : 'none'
   })
 
   return {

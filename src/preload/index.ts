@@ -133,6 +133,12 @@ const api = {
 
     permissionResponse: (toolId: string, choice: PermissionChoice): Promise<void> =>
       ipcRenderer.invoke('session:permissionResponse', toolId, choice) as Promise<void>,
+
+    onStatusLine: (cb: (text: string) => void): (() => void) => {
+      const listener = (_e: Electron.IpcRendererEvent, text: string) => cb(text)
+      ipcRenderer.on('session:statusLine', listener)
+      return () => ipcRenderer.removeListener('session:statusLine', listener)
+    },
   },
 
   system: {

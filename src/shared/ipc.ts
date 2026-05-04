@@ -164,6 +164,7 @@ export interface MainToRenderer {
   'session:logEvent': LogEvent          // structured event for the right-pane log
   'session:permissionRequest': PermissionRequest  // tool permission required; agent paused
   'session:cleared': void               // session was reset via /clear; renderer should wipe state
+  'session:statusLine': string          // output from statusLine shell command; empty = clear
 }
 
 export interface RendererToSystem {

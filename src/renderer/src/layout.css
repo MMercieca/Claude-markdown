@@ -501,6 +501,17 @@ html, body {
 .sb-auth-signing { opacity: 0.6; }
 .sb-auth-error   { color: #cf222e; }
 
+.sb-statusline {
+  order: 9999;
+  margin-left: auto;
+  opacity: 0.6;
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+
 @media (prefers-color-scheme: dark) {
   .sb-auth-error { color: #f85149; }
 }
