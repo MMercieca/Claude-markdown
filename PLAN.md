@@ -108,7 +108,54 @@ Adds support for **claude.ai OAuth** (Pro/Max subscription, used at home) and **
 ## Phase 15 — Smoke tests for the known unknowns (optional)
 
 - [x] **48. Verify user-level `CLAUDE.md` loads** with `settingSources: ['user','project','local']`.
-- [ ] **49. Force a mid-stream compaction** to confirm divider rendering doesn't corrupt a partial assistant message; fix if needed.
+- [x] **49. Force a mid-stream compaction** to confirm divider rendering doesn't corrupt a partial assistant message; fix if needed. **SKIPPED**
+
+---
+
+# v2 — Refactor plan (May 2026)
+
+Implements the `## Refactor v2 — May 2026` section of `design.md`. Five phases, sequenced so each box is one testable commit.
+
+**Architecture caveat:** Phases 17–20 below assume Option A or Option C from the design doc (SDK stays as the agent driver). If step 50's spike resolves to **Option B** (full `claude` CLI wrap), the rest of these phases must be re-sequenced — every SDK call becomes subprocess plumbing and the box list looks different.
+
+## Phase 16 — Spike & v2 decisions
+
+One commit's worth of investigation that unblocks everything below.
+
+- [x] **50. Headless slash-command spike + open-question resolution.** Run `claude --print --input-format stream-json --output-format stream-json` against `/insights`, `/export`, and `/login`; capture which (if any) dispatch headlessly into a new `notes/v2-spike.md`. Then resolve the five Open Questions in `design.md` inline (replace the section with concrete decisions): Option A/B/C choice, resume-on-launch default, multi-window restore policy, transcript hydration cap (default: render all, measure later), CLI binary discovery (default: `PATH` with explicit error if missing). *Verification: `notes/v2-spike.md` exists; `design.md`'s Open Questions section now reads as decisions, not questions.*
+
+## Phase 17 — Slash-command coverage inversion
+
+Flip the default from "intercept allowlist" to "pass-through". Surface the backend's actual `slash_commands` list in the UI. Ship `/insights` in the app.
+
+- [x] **58. Pass-through default for slash commands.** Remove the v0 intercept-allowlist; only `/clear`, `/effort`, and `/help` stay app-owned (per design.md v2 §Slash-command coverage). Everything else is forwarded to the backend as a normal prompt. *Verification: type `/compact` (or any command from the init message's `slash_commands` list) — it executes and the compaction marker appears.*
+- [ ] **59. `/help` overlay shows the backend's `slash_commands` list.** Capture `slash_commands` from the init `SystemMessage` into per-window state. The `/help` overlay renders app keybindings (existing) plus a section listing the backend's available slash commands for the current session. *Verification: open `/help`, confirm the list includes session-specific commands (e.g. `/compact`, plus any user/skill/plugin commands).*
+- [ ] **60. CLI shell-out for the headless-only allowlist (Option C only — skip if step 50 chose A or B).** Add a small allowlist in the slash-command dispatcher (initial entry: `/insights`) that, on match, spawns `claude <command>` as a one-shot subprocess and streams stdout into the response pane as Markdown. Errors render as a tool-error chip. Binary path resolved per step 50's decision. *Verification: type `/insights` — output appears in the response pane; verify `/insights` was previously failing with "unknown command" via the SDK.*
+
+## Phase 18 — Session persistence
+
+Disk-backed session state, restore-on-launch, picker UI. Uses the SDK's built-in `~/.claude/projects/<encoded-cwd>/<id>.jsonl` files plus a small app-side `state.json` for which session each window is currently on.
+
+- [ ] **51. `~/.claude-markdown/state.json` schema + main-process read/write helpers.** Define the `AppState` type from the design doc; add `loadState()` / `saveState()` in main with debounced writes (mirrors `layout.json` plumbing). Empty/missing/corrupt file → return default state and log. No UI yet. *Verification: hand-write a malformed `state.json`, launch app, confirm graceful fallback in main-process logs.*
+- [ ] **52. Capture and persist `session_id` per window.** Read `session_id` from the init `SystemMessage` on each new query; write it (plus `cwd`, `lastActiveAt`, `title=null`) into `state.json` for that window's `windowId`. Update on every `SDKResultMessage` to refresh `lastActiveAt`. *Verification: send a prompt, quit app, inspect `~/.claude-markdown/state.json` — the window entry has the captured session ID and a recent timestamp.*
+- [ ] **53. Restore windows on launch with `resume: sessionId`.** On `app.whenReady`, if `state.json` has windows, open one Electron window per saved entry in its saved `cwd`. The first `query()` for each restored window passes `resume: sessionId`. No transcript hydration yet (response pane stays empty until next turn). *Verification: send "remember the number 7", quit, relaunch, ask "what number?" — agent answers 7.*
+- [ ] **54. Hydrate transcript on resume via `getSessionMessages()`.** Before opening the live `query()` for a restored window, call `getSessionMessages(sessionId)` and replay user/assistant messages into the response pane (reuse the existing Markdown turn renderer). Tool events fan out to the right pane the same way live events do. *Verification: have a multi-turn session with visible bubbles, quit, relaunch — prior turns render in the response pane before any new prompt is sent.*
+- [ ] **55. `Cmd+O` session picker overlay.** New keybinding opens an overlay listing `listSessions()` filtered to the current `cwd`, sorted by `lastActiveAt` desc. Each row: short ID, first-user-prompt preview (one line), turn count, relative time. Click row → interrupt any active query (with confirm), then resume the chosen session in the same window (uses the step 52/54 plumbing). *Verification: with at least two sessions on disk for `cwd`, hit `Cmd+O`, pick the older one, transcript hydrates.*
+- [ ] **56. `/clear` preserves prior session on disk.** Confirm (and add a regression-style hand test) that `/clear` only resets the in-app session pointer — the cleared session's JSONL stays on disk and appears in the `Cmd+O` picker. Remove any code that would delete the file. Update the `/clear` user-visible message to mention "previous session reachable via Cmd+O". *Verification: send a turn, run `/clear`, open `Cmd+O` — the cleared session is in the list.*
+- [ ] **57. Fork action: "Fork from here" in the right pane.** Add a button in the right pane (idle state) that flags the *next* prompt to be sent with `forkSession: true`. On the resulting init message, capture the new session ID and update `state.json` for the window. *Verification: fork mid-conversation, both the original and fork appear in `Cmd+O`; resuming each shows the appropriate divergence.*
+
+## Phase 19 — Live activity stream
+
+Right pane gains a third view that mimics the `claude` CLI's live ticker. Cards and Raw JSON stay as alternative views.
+
+- [ ] **61. `Stream | Cards | Raw JSON` toggle in the right pane.** Add a three-way segmented toggle at the top of the right pane (above the existing structured event log). Selected mode persists in `state.json` as a single global preference (not per-window). Default: `Stream`. Stream view is empty until step 62 lands. *Verification: clicking the toggle switches visible content; preference survives an app restart.*
+- [ ] **62. Stream renderer consuming the SDK event stream.** Each `tool_use` becomes one line `● <Tool> <short-arg-summary>`; each matching `tool_result` appends `  ⎿ <result-summary>`. Assistant text events become subtle dimmer lines. Auto-scroll to bottom unless the user has scrolled up (sticky-bottom heuristic). Same event source the Cards view consumes — no new IPC. *Verification: send a prompt that triggers Read + Bash + Edit; stream populates with bullets and follow-ons in real time.*
+- [ ] **63. Tool chip → stream view scroll/highlight.** Existing tool chips in the response pane already scroll the right pane to the matching Card. Extend that behavior so when the right pane is in `Stream` mode, the matching line is scrolled into view and briefly highlighted. No behavior change for `Cards` or `Raw JSON` modes. *Verification: in Stream mode, click a tool chip in the response pane; the corresponding bullet flashes/highlights.*
+
+## Phase 20 — Cleanup
+
+- [ ] **64. Fold v2 into mainline `design.md`.** Remove the `> v2 supersedes…` flags by rewriting the Conversation model, Slash commands, Right-side status pane, and Out-of-scope sections to match what shipped. Move the `## Refactor v2 — May 2026` section's contents into the appropriate mainline sections; delete the v2-as-island block once content is merged. No code changes. *Verification: `grep "v2 supersedes" design.md` returns nothing; doc reads top-to-bottom without forward references.*
+
 ---
 
 ## Ordering notes
@@ -118,3 +165,10 @@ Adds support for **claude.ai OAuth** (Pro/Max subscription, used at home) and **
 - **Step 30 intentionally denies non-allowlisted tools** so step 31 isn't fixing a regression — it's adding a missing capability.
 - **Phases 5 and 8 stay decoupled.** Tool chips (step 28) need both the response transcript and the right-pane cards, so they sit in phase 8.
 - **Compaction (step 44) lives with errors**, not with response rendering, because the SDK message arrives through the same event stream as errors and is easier to handle once that pipeline is mature.
+
+### v2 ordering notes
+
+- **Step 50 must run before any other v2 step.** Its A/B/C decision determines whether Phases 17–20 stand as written (A or C) or need re-sequencing (B = full CLI wrap rewrites the agent path).
+- **Persistence before stream view (Phase 18 before Phase 19).** The right-pane Stream renderer reads the same event source the cards do — if persistence work uncovers any event-shape changes (likely none, but possible), better to find them before adding a new consumer.
+- **Step 60 is the only Option-C-specific box.** If step 50 picks Option A, skip 60 and proceed to Phase 19. The pass-through inversion (58, 59) is independent of A/B/C.
+- **Step 64 is documentation-only and last.** Doing it earlier means re-rewriting the doc as later steps reveal the design was wrong about something.

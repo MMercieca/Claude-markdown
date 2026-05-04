@@ -13,6 +13,226 @@ Claude Code is the user's primary interface for working with Claude. Three gaps 
 
 "Do work" is in scope — file edits, shell, MCP, all of Claude Code's capabilities.
 
+---
+
+## Refactor v2 — May 2026
+
+After running v0 end-to-end, three gaps are large enough to drive a significant refactor. This section captures the new goals, the architectural decision they force, and how each goal lands in the design. **Sections below this point that v2 supersedes are flagged inline; treat the v2 section as authoritative where they conflict.**
+
+### v2 goals
+
+1. **Real session persistence.** Sessions should survive app restarts. The user can quit `claude-markdown`, reopen it, and resume a prior conversation — including resuming the most recent session in a given `cwd` (analogous to `claude --continue`) and picking a specific older session from a list (analogous to `claude --resume <id>`).
+2. **Full Claude Code slash-command coverage.** All slash commands the user types in `claude` itself should work here, including ones the v0 design doesn't intercept. `/insights` is the motivating example, but the goal is parity, not a curated list.
+3. **Rich live status output.** The right-side status pane should feel like the activity feed in `claude` itself: a continuously-updating stream of one-liners as the agent reads files, runs Bash, spawns Task agents, etc. The structured-card view from v0 is correct as a *detail* surface, but the headline experience the user wants is the live ticker.
+
+The v2 phrasing also adds a meta-goal:
+
+> *If we get this right, `claude-markdown` becomes my replacement for the `claude` CLI.*
+
+That framing matters: it raises the bar from "good Claude UI" to "lossless superset of `claude`'s headless behavior, plus better rendering." Anything `claude` does at the terminal that we can't replicate becomes a regression, not a missing feature.
+
+### Architectural decision: SDK vs. CLI wrapping
+
+The user pointed at [`dodontommy/claws`](https://github.com/dodontommy/claws) (`brew install dodontommy/tap/claws`) as the prompt for this refactor. **claws is not a substrate we can build on**, but it's worth understanding why before sequencing the rest of this section — the answer rules out one option and validates two others.
+
+#### What claws actually is
+
+claws is a Rust **TUI** (terminal UI) for managing multiple `claude` sessions in parallel:
+
+```
+┌─────────────┐         ┌────────────┐
+│  TUI client │ ──RPC──▶│  daemon    │──┬─ PTY ─▶ claude --session-id ...
+└─────────────┘  unix   │            │  ├─ PTY ─▶ claude --resume ...
+      ▲         socket  │  registry  │  └─ PTY ─▶ claude --resume ...
+      │                 │  + sqlite  │
+      │                 │  + auth    │
+      └─── attached ────┘
+```
+
+- Long-lived daemon owns each `claude` subprocess inside its own **PTY**, parses the vt100 stream into an internal screen, persists per-session metadata (cwd, flags, model, name) to SQLite.
+- TUI client connects over a mode-0700 Unix socket with per-startup auth token. A phone PWA does the same over Tailscale.
+- Continuity within a single conversation comes from Claude's own `--session-id` / `--resume <id>` flags. claws orchestrates *between* conversations.
+- Hooks emitted by Claude flow back through `claws hook-emit` into the daemon, which is how it knows a session is in `awaiting_permission`.
+- Built with `ratatui`, `portable-pty`, `vt100`, `rusqlite`, `interprocess`, `axoupdater`.
+
+#### Why it's not a substrate for claude-markdown
+
+The two products solve *different* problems:
+
+| Concern | claws | claude-markdown |
+| :--- | :--- | :--- |
+| Primary problem | Orchestrate many sessions side-by-side | Render one session beautifully (Markdown) |
+| Output substrate | vt100/ANSI from interactive `claude` | Structured events (SDK or stream-JSON) |
+| Renderer | Terminal screen via `vt100` crate | Browser DOM via `react-markdown` |
+| Multi-session | Core feature | Cmd+N opens another window |
+
+To build claude-markdown *on top of* claws, we'd have to take vt100-emulated screen bytes from claws's daemon and try to reverse them back to structured Markdown — strictly worse than going directly to the SDK or `claude --output-format stream-json`. claws's whole value is the terminal rendering it commits to; reversing that is fighting the design.
+
+#### What claws does validate for us
+
+- **PTY-wrapping `claude` works in production.** If we ever needed it, claws is the existence proof.
+- **`claude --session-id ... --resume <id>` is a real, stable API**, used to "re-spawn every session you didn't explicitly close" across daemon restarts. Confirms goal #1 is achievable via either the SDK or the CLI.
+- **Claude has a `hook-emit` mechanism** that pushes events out-of-band — claws uses it for `awaiting_permission`. If we go Option B/C below, we may be able to use the same mechanism to drive the right-pane live stream without parsing stdout.
+- **Coexistence is fine.** claws orchestrates terminal `claude` sessions; claude-markdown is a different surface for one session. A user could run both. Out of scope for this refactor.
+
+#### The actual choice
+
+With claws ruled out as a substrate, the real choice is still between three architectures:
+
+#### Option A — Stay on `@anthropic-ai/claude-agent-sdk`, add session management
+
+Keep the existing SDK integration. Add resume/continue/fork plumbing using the SDK's built-in primitives.
+
+The SDK already does more than v0 currently uses:
+
+- **Disk persistence is automatic.** Every session is written to `~/.claude/projects/<encoded-cwd>/<session-id>.jsonl` unless `persistSession: false` is passed. We don't need a custom store.
+- **Resumption is a single option.** `resume: sessionId` returns to a specific session; `continue: true` returns to the most recent session in the current `cwd`; `forkSession: true` branches.
+- **Enumeration helpers exist.** `listSessions()`, `getSessionMessages()`, `getSessionInfo()`, `renameSession()`, `tagSession()` cover everything a session-picker UI needs.
+- **Session ID lifecycle.** Captured from the init `SystemMessage` (`message.session_id` direct field in TS) on the first turn; also present on every `SDKResultMessage`. Persist it per window in `~/.claude-markdown/state.json`.
+
+Pros: smallest delta from current code; typed events stay typed; permission callbacks (`canUseTool`) keep working as-is; Phase-7 auth work doesn't need to be redone.
+
+Cons: **CLI-exclusive slash commands stay missing.** The SDK explicitly only dispatches commands "that work without an interactive terminal." The `system/init` message lists what is available in your session via the `slash_commands` array. `/insights`, `/export`, `/login`, `/logout`, `/status`, `/upgrade`, `/release-notes`, `/vim`, and most of the CLI's UX-layer commands are outside that set. Re-implementing them ourselves is rebuilding CLI features in a wrapper, indefinitely.
+
+#### Option B — Wrap the `claude` CLI binary as a child process
+
+Spawn `claude` headless and talk to it over stream-JSON:
+
+```
+claude \
+  --print \
+  --input-format stream-json \
+  --output-format stream-json \
+  --session-id <our-id>          # or --resume <id> / --continue
+```
+
+Pipe NDJSON user messages into stdin, parse NDJSON events from stdout. Use CLI flags for the headless equivalents of permission prompts (`--permission-mode`, `--allowedTools`, etc.).
+
+Pros: native parity with `claude` is automatic; new CLI features land here for free; settings/MCP/skills behave exactly as the user already configures them for `claude`; one less moving part if the user is already on the CLI elsewhere.
+
+Cons: **CLI slash-command parity is not actually free either.** The same constraint applies — only commands that work non-interactively are dispatchable in stream-JSON mode. Need to spike `/insights` specifically before committing. Also: subprocess plumbing is brittler than an in-process SDK call; permission callbacks become async hook flags instead of typed Promise returns; we have to manage the binary's location and version; renderer-visible types come from parsed JSON, not TS interfaces; auth state is whatever `claude` has on disk, which may differ from what v0's auth picker selected.
+
+#### Option C — Hybrid: SDK for the loop, CLI for what only the CLI does
+
+Keep the SDK as the primary agent driver (and keep all of v0's typed events, permission callbacks, multi-window state, auth picker). For the small set of CLI-only slash commands the user actually wants, intercept them in the slash-command dispatcher and shell out to `claude <command>` as a one-shot subprocess, capturing stdout and rendering it into the response pane.
+
+Pros: minimum disruption; no regression on Phase 7 (auth) or Phase 9 (permissions); covers `/insights` cleanly; falls back to the SDK for everything else.
+
+Cons: two code paths for slash commands; some CLI commands (`/login`, `/logout`) mutate state the SDK then has to re-detect; the user's auth picker selection in the app may not match what `claude` uses on disk for the shell-out, which could be confusing.
+
+#### Recommendation framing
+
+This is your call, not mine. My read:
+
+- **If "becomes my replacement for the `claude` CLI" is load-bearing**, Option B (or B-leaning hybrid) is the only honest answer. Anything else means re-implementing CLI features chasing a moving target.
+- **If the goal is closer to "great Markdown-rendered SDK app that also does `/insights`"**, Option C gets there with the least churn and zero regression on the seven phases of work that already shipped.
+- **Option A alone won't satisfy goal #2** (CLI-only commands stay missing). Document it as the cheapest option but only if `/insights`-class commands turn out to not actually matter once we look harder.
+
+A spike worth doing before committing: run `claude --print --input-format stream-json --output-format stream-json` and try `/insights`. If it works headlessly, Option B is much more attractive. If it errors with "interactive only," the gap is real and Option C is the pragmatic middle.
+
+### Session persistence design
+
+Independent of the SDK-vs-CLI choice — both paths give us session IDs and resume support. What changes is how we surface them in the app.
+
+**State to persist** (in `~/.claude-markdown/state.json`, alongside the existing `layout.json`):
+
+```ts
+type AppState = {
+  windows: Array<{
+    cwd: string;
+    sessionId: string | null;     // null = no turns yet
+    lastActiveAt: string;          // ISO timestamp
+    title: string | null;          // user-set or auto-generated from first prompt
+  }>;
+  layoutVersion: number;           // for forward-compat
+};
+```
+
+**Launch flow:**
+
+1. On app start, read `state.json`.
+2. If there are persisted windows, restore them in their previous `cwd` with their previous `sessionId`. The status bar shows `cwd | model | effort | auth | resumed: <short-id>` for resumed sessions.
+3. The first `query()` for a resumed window passes `resume: sessionId`. The transcript hydrates by calling `getSessionMessages(sessionId)` *before* opening the live query — this populates the response pane with prior turns so the user lands on a populated view, not an empty one.
+4. If there are no persisted windows, open one fresh in config mode (current v0 behavior).
+
+**Session picker UI** (replaces v0's "ephemeral across restarts"):
+
+- New `Cmd+O` ("Open session") opens an overlay listing sessions for the current `cwd`, ordered by `lastActiveAt` desc. Shows: short ID, title, first user prompt preview, turn count, last-active relative time.
+- Selecting a session resumes it in the current window (interrupts any active query first, with confirm).
+- Right-pane action: "Fork from here" runs the next prompt with `forkSession: true`, captures the new ID from the next init message, and updates `state.json`.
+
+**`/clear` behavior change:** still starts a fresh session in the same window, but the *old* session stays on disk and is reachable through `Cmd+O`. The current "destroys session" wording in the v0 Conversation model is wrong for v2.
+
+**Token-cost note (responding to the user's concern):** there is no way to "keep an agent session going without spending a lot of tokens." Both SDK resume and CLI `--resume` work the same way: the on-disk JSONL transcript is replayed into the model's context for the next turn. A 100k-token session costs 100k input tokens to resume *the first turn*, just like continuing a long live conversation does. Anthropic's prompt-cache cuts the *repeated* portion's cost dramatically (cached input is ~10% the price of fresh input), and the SDK uses caching by default. There is no hidden lever for "persistent context with no token cost" — that would require a server-side stateful session, which Claude doesn't offer in this form. The honest framing is "we get persistent context for one cache-friendly cost per resume."
+
+### Status pane: live activity stream
+
+The v0 right-side pane is structured cards. Keep that as the *detail* view, but add a primary live-stream view above it:
+
+```
++------------------------------------+
+|  Sticky header (current activity   |
+|   + [Interrupt])                   |
++------------------------------------+
+|  Live stream                        |   ← new in v2
+|  ● Read foo.ts                     |
+|    ⎿ 47 lines                      |
+|  ● Bash: pnpm test                 |
+|    ⎿ 18 passed                     |
+|  ● Edit bar.ts                     |
+|  ● Task: explore-agent             |
+|    ⎿ ran 6 tools, 12s              |
+|  ...                                |
++------------------------------------+
+|  Toggle: Stream | Cards | Raw JSON |
++------------------------------------+
+|  (Cards or JSON view — collapsible)|
++------------------------------------+
+```
+
+- **Stream view** is the default. Each SDK event becomes one or two lines (action + result summary). Visual style mirrors the `claude` CLI's `●` bullets and `⎿` follow-ons. Auto-scrolls unless the user has scrolled up.
+- **Cards view** is the existing Phase 8 structured cards (renamed from the default).
+- **Raw JSON view** is the existing Phase 8 toggle.
+- Three modes, one toggle. State persists across windows (one user preference).
+- Tool chips in the response pane (Phase 8 step 28) still work — clicking a chip scrolls the right pane to the matching event in whichever view is active.
+
+The stream view is the *only* part of the right-pane plan that's genuinely new code. Cards and JSON already exist; this adds a third renderer that consumes the same event stream.
+
+### Slash-command coverage in v2
+
+The v0 design's "small allowlist" approach (lines 214–224) is now wrong for v2's goal #2. The v2 model:
+
+- **Pass everything to the backend** (SDK or CLI) by default. Whatever the backend can handle, it handles.
+- **Intercept only what the app must own** because the backend can't: `/clear` (because it changes which session ID we track and update in `state.json`), `/effort` (because it's a `query()` construction option, not a runtime command), `/help` (overlay listing app keybindings + a note that all backend commands work).
+- **Expose `slash_commands` in the UI.** Read the `system/init` message's `slash_commands` array on session start; render it in the `/help` overlay so the user can see what's available in the current session (varies with skills, plugins, MCP).
+- **Under Option C**, the dispatcher checks the command against a small "CLI-only" allowlist before passing to the SDK. If matched, shell out to `claude <command>` and stream stdout into the response pane. Initial allowlist: `/insights`. Grow it as the user finds gaps.
+
+### What this refactor breaks
+
+- **PLAN.md item 49** (force a mid-stream compaction) is still valid but lower priority — compaction divider rendering is unaffected by the v2 changes.
+- **The Conversation model section below** ("Persistent multi-turn within a session" + "Ephemeral across restarts") becomes wrong on the second point. v2 sessions are persistent across restarts.
+- **The Slash commands section below** describes a small intercept allowlist; v2 inverts the default (pass-through) and adds an optional CLI shell-out path under Option C.
+- **The Right-side status pane section below** describes a structured event log as primary; v2 makes the live stream primary and demotes cards to a toggle.
+- **The Out-of-scope list** ("Session persistence / history sidebar / search") loses its first item. Search is still out of scope for v2; persistence and history sidebar are now in.
+
+### Decisions (resolved by step 50 spike, 2026-05-04)
+
+The five questions previously open here are answered below. Spike methodology and per-command results: `notes/v2-spike.md`.
+
+1. **Architecture: Option C (hybrid).** SDK stays as the agent driver. A small CLI shell-out allowlist handles headless-dispatchable CLI-only commands. *Why:* the spike confirmed `/insights` and `/cost` dispatch fine via `claude --print`, while the commands that *don't* dispatch headlessly (`/help`, `/export`, `/status`) are terminal-display features that don't translate to a Markdown GUI. Option B would buy us no additional commands beyond C while costing the typed event stream, in-process permission callbacks, and the existing Phase-7 auth work. Option A alone leaves `/insights` missing.
+
+2. **Resume-on-launch: auto-resume all windows that were open at quit.** *Why:* matches the user's "replacement for the `claude` CLI" framing — `claude --continue` is the established UX for "pick up where I left off." If a session is in a weird state, `Cmd+O` swaps to a different one in O(1) and is reachable from the resumed view; the safety case doesn't justify making the common case worse.
+
+3. **Multi-window restore: restore every window that was open at quit.** *Why:* each window owns its session; collapsing to one window on relaunch silently abandons the others and forces the user to manually re-open them via `Cmd+O`. Honoring the layout the user had at quit is least surprising. Cost is bounded — `state.json` already constrains how many windows we'll spawn.
+
+4. **Hydration cost: render all messages on resume; measure before optimizing.** *Why:* the box already specifies this, and the spike didn't surface any reason to pre-empt it. If long-session hydration turns out slow, add a "load earlier turns" affordance behind a measured threshold (suggested initial cap if needed: last 50 turns).
+
+5. **CLI binary discovery: `PATH` lookup with explicit error if missing.** *Why:* the box already specifies this. The spike confirmed `/Users/mercieca/.local/bin/claude` is on PATH for terminal-launched processes; Finder-launched Electron processes inherit a sparser PATH. Phase 11's shell shortcut already addresses this; the same wrapper fix applies. If users hit this in practice, add a one-line app-config override.
+
+---
+
+> **The sections below are the original v0 design. Where v2 (above) supersedes a section, it is flagged inline.**
+
 ## Architecture
 
 ### Tech stack
@@ -64,6 +284,8 @@ Auth provider is detected via `q.accountInfo()` (`apiProvider`, `subscriptionTyp
 Auth-mode selection is the load-bearing input for several conditional UI behaviors (cost chip visibility, rate-limit chip visibility, eligible model list), so it's surfaced once via `accountInfo()` rather than rederived per-feature.
 
 ## Conversation model
+
+> **v2 supersedes the "Ephemeral across restarts" point.** See *Refactor v2 → Session persistence design* above. Sessions persist to disk via the SDK; closing a window leaves the JSONL on disk and `Cmd+O` can resume it. The other two points below are still accurate.
 
 - **Persistent multi-turn within a session.** Single `query()` call with an async-generator prompt that yields each new user message. Agent stays alive between turns and remembers everything; SDK handles compaction.
 - **Ephemeral across restarts.** No persistence layer, no session list, no archive. Closing a window destroys its session. Matches Claude Code's terminal default.
@@ -169,6 +391,8 @@ When the SDK emits an `SDKCompactBoundaryMessage`:
 
 ## Right-side status pane
 
+> **v2 supersedes the default view.** See *Refactor v2 → Status pane: live activity stream* above. v2 makes a CLI-style live stream the primary view, with the structured cards described below demoted to a `Cards` toggle alongside `Stream` and `Raw JSON`.
+
 Sticky header + scrolling structured event log.
 
 ### Sticky header
@@ -208,6 +432,8 @@ Sticky header + scrolling structured event log.
 - Inherits user's `~/.claude/settings.json` permission rules; only prompts for items not pre-allowed there.
 
 ## Slash commands
+
+> **v2 supersedes this section's intercept-allowlist model.** See *Refactor v2 → Slash-command coverage in v2* above. v2 inverts the default to pass-through, intercepts only `/clear`, `/effort`, `/help`, and (under Option C) shells out to `claude <command>` for a CLI-only allowlist starting with `/insights`. The table below documents the v0 behavior for reference.
 
 The SDK natively processes slash commands when settings are loaded. Skill commands (`/grill-me`, `/diagnose`), user commands (`~/.claude/commands/*.md`), and plugin commands all flow through unchanged.
 
@@ -297,6 +523,8 @@ Things to verify or revisit during implementation, not blockers:
 4. **Setting `effort` change after `/clear`**: the canonical `effort` option is set at `query()` construction. `/effort high` followed by `/clear` should pass `effort: 'high'` to the new query — verify the value persists across the new-session flow.
 
 ## Out of scope (v0)
+
+> **v2 brings session persistence and a history sidebar in scope.** Search across sessions remains out of scope.
 
 - Session persistence / history sidebar / search.
 - In-app theme picker.

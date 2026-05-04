@@ -8,7 +8,7 @@ import 'highlight.js/styles/github.css'
 import { ResponseView } from './response'
 import { mountStatusBar } from './status-bar'
 import { mountRightPane } from './right-pane'
-import type { UsageState, AuthInfo, SerializedImage, ImageMediaType } from '../../shared/ipc'
+import type { SerializedImage, ImageMediaType } from '../../shared/ipc'
 
 const leftCol = document.getElementById('left-col') as HTMLElement
 const responsePane = document.getElementById('response-pane') as HTMLElement
@@ -152,8 +152,6 @@ const editableCompartment = new Compartment()
 
 // Tracks whether the agent is currently generating.
 let agentActive = false
-let insightsUsage: UsageState = {}
-let insightsAuth: AuthInfo | null = null
 let insightsTurnCount = 0
 
 const rightPane = mountRightPane(rightHeader, rightLog, () => {
@@ -353,8 +351,6 @@ window.api.session.onSignInStatus((status) => {
   }
 })
 
-window.api.session.onUsage((u) => { insightsUsage = { ...insightsUsage, ...u } })
-window.api.session.onAuth((a) => { insightsAuth = a })
 window.api.session.onCompaction((info) => {
   responseView.addCompactionMarker(info)
   rightPane.addCompactionMarker(info)
@@ -366,8 +362,6 @@ window.api.session.onCleared(() => {
   responseView.clear()
   rightPane.clear()
   void statusBarReady.then((sb) => sb.unfreeze())
-  insightsUsage = {}
-  insightsAuth = null
   insightsTurnCount = 0
   agentActive = false
   pastedImages.clear()
@@ -402,25 +396,6 @@ function handleSlashCommand(text: string, view: EditorView): boolean {
   if (cmd === '/help') {
     view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: '' } })
     showHelpOverlay()
-    return true
-  }
-
-  if (cmd === '/cost') {
-    view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: '' } })
-    rightLog.scrollTop = rightLog.scrollHeight
-    rightLog.focus()
-    return true
-  }
-
-  if (cmd === '/insights') {
-    view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: '' } })
-    void showInsights()
-    return true
-  }
-
-  if (cmd === '/model') {
-    view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: '' } })
-    void handleModelCommand(text)
     return true
   }
 
@@ -469,116 +444,6 @@ function handleEffortCommand(text: string): void {
   })()
 }
 
-async function handleModelCommand(text: string): Promise<void> {
-  const parts = text.trim().split(/\s+/)
-  const config = await window.api.config.get()
-  if (!config) return
-
-  // Bare /model — list models in right pane
-  if (parts.length === 1) {
-    rightPane.showModelList(config.models, config.model)
-    return
-  }
-
-  // /model <name> — change model; accepts full ID, full label, or substring (e.g. "sonnet")
-  const requested = parts[1]!
-  const q = requested.toLowerCase()
-  const match = config.models.find(
-    (m) =>
-      m.id === requested ||
-      m.label.toLowerCase() === q ||
-      m.id.includes(q) ||
-      m.label.toLowerCase().includes(q)
-  )
-
-  if (!match) {
-    responseView.addSystemMessage(
-      `**Unknown model:** \`${requested}\`\n\nAvailable models: ${config.models.map((m) => `\`${m.id}\``).join(', ')}`
-    )
-    return
-  }
-
-  const err = await window.api.session.setModel(match.id)
-  if (err) {
-    responseView.addSystemMessage(`**Failed to set model:** ${err}`)
-    return
-  }
-
-  void statusBarReady.then((sb) => sb.setModel(match.id))
-  responseView.addSystemMessage(`Model changed to **${match.label}** (\`${match.id}\`)`)
-}
-
-async function showInsights(): Promise<void> {
-  const config = await window.api.config.get()
-  const u = insightsUsage
-  const auth = insightsAuth
-  const turnCount = insightsTurnCount
-
-  const lines: string[] = ['## Session Insights', '']
-
-  // Session info
-  const model = config?.model ?? 'unknown'
-  const effort = config?.effort ?? 'unknown'
-  const cwd = config?.cwd ?? '—'
-  lines.push(`**Working directory:** \`${cwd}\``)
-  lines.push(`**Model:** ${model}  `)
-  lines.push(`**Effort:** ${effort}  `)
-  lines.push(`**Auth:** ${auth?.label ?? config?.authMode ?? 'unknown'}  `)
-  lines.push(`**Turns this session:** ${turnCount}`)
-  lines.push('')
-
-  // Usage
-  lines.push('### Usage')
-  lines.push('')
-
-  const rows: [string, string][] = []
-
-  if (u.ctxPct !== undefined) {
-    const bar = usageBar(u.ctxPct)
-    rows.push(['Context window', `${bar} ${u.ctxPct}%`])
-  }
-
-  if (auth?.showCost && u.costUsd !== undefined) {
-    const cost = u.costUsd < 0.01 && u.costUsd > 0 ? '<$0.01' : `$${u.costUsd.toFixed(4)}`
-    rows.push(['Session cost', `~${cost}`])
-  }
-
-  if (u.fiveHourStatus !== undefined || u.fiveHourPct !== undefined) {
-    const val = u.fiveHourPct !== undefined
-      ? `${usageBar(u.fiveHourPct)} ${u.fiveHourPct}%`
-      : rateLimitSymbol(u.fiveHourStatus)
-    rows.push(['5-hour rate limit', val])
-  }
-
-  if (u.sevenDayStatus !== undefined || u.sevenDayPct !== undefined) {
-    const val = u.sevenDayPct !== undefined
-      ? `${usageBar(u.sevenDayPct)} ${u.sevenDayPct}%`
-      : rateLimitSymbol(u.sevenDayStatus)
-    rows.push(['7-day rate limit', val])
-  }
-
-  if (rows.length === 0) {
-    lines.push('_No usage data yet — send a prompt first._')
-  } else {
-    lines.push('| Metric | Value |')
-    lines.push('|--------|-------|')
-    for (const [k, v] of rows) lines.push(`| ${k} | ${v} |`)
-  }
-
-  responseView.addSystemMessage(lines.join('\n'))
-}
-
-function usageBar(pct: number): string {
-  const filled = Math.round(pct / 10)
-  return `${'█'.repeat(filled)}${'░'.repeat(10 - filled)}`
-}
-
-function rateLimitSymbol(status: string | undefined): string {
-  if (status === 'rejected') return '✗ over limit'
-  if (status === 'allowed_warning') return '! near limit'
-  return '✓ within limit'
-}
-
 function showHelpOverlay(): void {
   const existing = document.getElementById('help-overlay')
   if (existing) { existing.remove(); return }
@@ -612,19 +477,17 @@ function showHelpOverlay(): void {
   const cmdSection = document.createElement('div')
   cmdSection.className = 'help-section'
   cmdSection.innerHTML = `
-    <div class="help-section-title">Slash commands</div>
+    <div class="help-section-title">App slash commands</div>
     <table class="help-table">
       <tr><td><code>/clear</code></td><td>New session (preserves cwd)</td></tr>
       <tr><td><code>/help</code></td><td>Show this overlay</td></tr>
-      <tr><td><code>/cost</code></td><td>Scroll to usage stats</td></tr>
-      <tr><td><code>/model [name]</code></td><td>Change model mid-session</td></tr>
       <tr><td><code>/effort [level]</code></td><td>Set effort (before first prompt)</td></tr>
     </table>
   `
 
   const note = document.createElement('p')
   note.className = 'help-note'
-  note.textContent = 'Skill commands (/diagnose, /grill-me, etc.) pass through to Claude.'
+  note.textContent = 'All other slash commands (/compact, /insights, /model, skill commands, etc.) pass through to Claude directly.'
 
   const closeBtn = document.createElement('button')
   closeBtn.className = 'help-close-btn'
