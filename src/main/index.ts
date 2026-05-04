@@ -365,6 +365,13 @@ async function runQueryLoop(
       model: session.model,
       effort: session.effort,
       canUseTool: makeCanUseTool(session, win, settingsAllowlist),
+      onElicitation: async (request) => {
+        if (request.mode === 'url' && request.url) {
+          await shell.openExternal(request.url)
+          return { action: 'accept' }
+        }
+        return { action: 'decline' }
+      },
     },
   })
   session.activeQueryObj = q

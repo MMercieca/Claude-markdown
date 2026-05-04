@@ -102,7 +102,7 @@ Adds support for **claude.ai OAuth** (Pro/Max subscription, used at home) and **
 ## Phase 14 — Multi-window + MCP polish
 
 - [x] **45. `Cmd+N` new window in config mode; `Cmd+W` interrupts + cleans up.** macOS Window menu lists windows; app survives last-window-close.
-- [ ] **46. MCP auth via `shell.openExternal`.** When an MCP auth tool emits a "visit this URL" message, open in user's real browser.
+- [x] **46. MCP auth via `shell.openExternal`.** When an MCP auth tool emits a "visit this URL" message, open in user's real browser.
 - [ ] **47. Optional `statusLine` shell-out.** Opt-in via app config; appended to right of status bar.
 
 ## Phase 15 — Smoke tests for the known unknowns (optional)
