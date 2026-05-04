@@ -3,7 +3,7 @@ import { useEffect, useRef, useState, type ComponentPropsWithoutRef } from 'reac
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeHighlight from 'rehype-highlight'
-import type { AuthError, BlockingError, ConfigError, SerializedImage } from '../../shared/ipc'
+import type { AuthError, BlockingError, ConfigError, CompactionInfo, SerializedImage } from '../../shared/ipc'
 
 function CodeBlock({ children, ...props }: ComponentPropsWithoutRef<'pre'>): React.JSX.Element {
   const preRef = useRef<HTMLPreElement>(null)
@@ -79,6 +79,7 @@ export type Turn =
   | { role: 'user'; text: string; images?: SerializedImage[] }
   | { role: 'assistant'; segments: TurnSegment[]; interrupted?: boolean }
   | { role: 'system'; markdown: string }
+  | { role: 'compaction'; turnNum: number; trigger: 'manual' | 'auto'; preTokens: number; postTokens?: number }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -204,6 +205,16 @@ function ConfigErrorBanner({
   )
 }
 
+function fmtTokens(n: number): string {
+  return n >= 1000 ? `${Math.round(n / 1000)}k` : String(n)
+}
+
+function compactionLabel(trigger: string, preTokens: number, postTokens?: number): string {
+  let label = `compacted (${trigger})`
+  if (postTokens !== undefined) label += ` · ${fmtTokens(preTokens)} → ${fmtTokens(postTokens)}`
+  return label
+}
+
 function closeOpenFence(buf: string): string {
   const fenceLines = buf.match(/^```/gm)?.length ?? 0
   return fenceLines % 2 === 1 ? buf + '\n```' : buf
@@ -303,6 +314,14 @@ function Transcript({ turns, activeTurn, authError, onDismissAuthError, blocking
                 </ReactMarkdown>
               )}
             </div>
+          ) : turn.role === 'compaction' ? (
+            <div className="compact-divider">
+              <span className="compact-divider-line" />
+              <span className="compact-divider-label">
+                {compactionLabel(turn.trigger, turn.preTokens, turn.postTokens)}
+              </span>
+              <span className="compact-divider-line" />
+            </div>
           ) : turn.role === 'system' ? (
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
@@ -389,6 +408,17 @@ export class ResponseView {
 
   showAuthError(error: AuthError | null): void {
     this.authError = error
+    this.render()
+  }
+
+  addCompactionMarker(info: CompactionInfo): void {
+    this.turns.push({
+      role: 'compaction',
+      turnNum: info.turnNum,
+      trigger: info.trigger,
+      preTokens: info.preTokens,
+      postTokens: info.postTokens,
+    })
     this.render()
   }
 

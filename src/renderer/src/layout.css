@@ -109,6 +109,18 @@ html, body {
   padding: 8px 0;
 }
 
+.rl-compact-sep {
+  font-size: 10px;
+  text-align: center;
+  opacity: 0.5;
+  padding: 6px 12px;
+  font-style: italic;
+  user-select: none;
+  border-top: 1px dashed var(--divider);
+  border-bottom: 1px dashed var(--divider);
+  margin: 4px 0;
+}
+
 .rl-turn-sep {
   font-size: 10px;
   text-align: center;
@@ -766,6 +778,27 @@ html, body {
 @media (prefers-color-scheme: dark) {
   .tool-chip-ok    .tool-chip-status { color: #3fb950; }
   .tool-chip-error .tool-chip-status { color: #f85149; }
+}
+
+.compact-divider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+  opacity: 0.45;
+  user-select: none;
+}
+
+.compact-divider-line {
+  flex: 1;
+  height: 1px;
+  background: currentColor;
+}
+
+.compact-divider-label {
+  font-size: 10px;
+  font-style: italic;
+  white-space: nowrap;
 }
 
 #response-content .interrupted {

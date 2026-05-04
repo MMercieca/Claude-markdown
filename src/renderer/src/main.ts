@@ -347,6 +347,10 @@ window.api.session.onSignInStatus((status) => {
 
 window.api.session.onUsage((u) => { insightsUsage = { ...insightsUsage, ...u } })
 window.api.session.onAuth((a) => { insightsAuth = a })
+window.api.session.onCompaction((info) => {
+  responseView.addCompactionMarker(info)
+  rightPane.addCompactionMarker(info)
+})
 window.api.session.onBlockingError((error) => { responseView.showBlockingError(error) })
 window.api.session.onConfigError((error) => { responseView.showConfigError(error) })
 

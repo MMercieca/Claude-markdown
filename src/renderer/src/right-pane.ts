@@ -1,10 +1,11 @@
-import type { TurnStats, LogEvent, PermissionRequest, PermissionChoice, ModelOption } from '../../shared/ipc'
+import type { TurnStats, LogEvent, PermissionRequest, PermissionChoice, ModelOption, CompactionInfo } from '../../shared/ipc'
 
 export interface RightPaneHandle {
   setActive(activity?: string): void
   setIdle(): void
   clear(): void
   showModelList(models: ModelOption[], currentModel: string): void
+  addCompactionMarker(info: CompactionInfo): void
 }
 
 export function mountRightPane(
@@ -462,6 +463,18 @@ export function mountRightPane(
 
       card.append(header, body)
       logEl.append(card)
+      logEl.scrollTop = logEl.scrollHeight
+    },
+    addCompactionMarker(info: CompactionInfo): void {
+      const fmtK = (n: number): string => n >= 1000 ? `${Math.round(n / 1000)}k` : String(n)
+      const sep = document.createElement('div')
+      sep.className = 'rl-compact-sep'
+      let text = `⊛ Compacted (${info.trigger})`
+      if (info.postTokens !== undefined) {
+        text += ` · ${fmtK(info.preTokens)} → ${fmtK(info.postTokens)}`
+      }
+      sep.textContent = text
+      logEl.append(sep)
       logEl.scrollTop = logEl.scrollHeight
     },
     clear(): void {

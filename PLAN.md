@@ -97,11 +97,11 @@ Adds support for **claude.ai OAuth** (Pro/Max subscription, used at home) and **
 - [x] **41. Tool errors render as red chip + red right-pane card.** Permission denials show `denied` status (not error styling).
 - [x] **42. Blocking error banner with `[Retry] [Dismiss]`.** Network/4xx/5xx/rate-limit/SDK crash. Quota errors get a live countdown.
 - [x] **43. Config error banner with `[Reload settings]`.** Hook failures, malformed settings.
-- [ ] **44. Compaction marker.** On `SDKCompactBoundaryMessage`: thin divider in transcript with `[show summary]` toggle; mirrored card in right pane; usage display reflects post-compact state.
+- [x] **44. Compaction marker.** On `SDKCompactBoundaryMessage`: thin divider in transcript with `[show summary]` toggle; mirrored card in right pane; usage display reflects post-compact state.
 
 ## Phase 14 — Multi-window + MCP polish
 
-- [ ] **45. `Cmd+N` new window in config mode; `Cmd+W` interrupts + cleans up.** macOS Window menu lists windows; app survives last-window-close.
+- [x] **45. `Cmd+N` new window in config mode; `Cmd+W` interrupts + cleans up.** macOS Window menu lists windows; app survives last-window-close.
 - [ ] **46. MCP auth via `shell.openExternal`.** When an MCP auth tool emits a "visit this URL" message, open in user's real browser.
 - [ ] **47. Optional `statusLine` shell-out.** Opt-in via app config; appended to right of status bar.
 

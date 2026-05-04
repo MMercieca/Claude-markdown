@@ -1,10 +1,10 @@
-import { app, BrowserWindow, ipcMain, nativeTheme, dialog, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, nativeTheme, dialog, shell, Menu, MenuItem } from 'electron'
 import { readFile, writeFile, mkdir } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { homedir } from 'node:os'
 import { query } from '@anthropic-ai/claude-agent-sdk'
-import type { SDKUserMessage, SDKRateLimitInfo, Query, SDKAssistantMessage, CanUseTool } from '@anthropic-ai/claude-agent-sdk'
+import type { SDKUserMessage, SDKRateLimitInfo, Query, SDKAssistantMessage, SDKCompactBoundaryMessage, CanUseTool } from '@anthropic-ai/claude-agent-sdk'
 import type {
   LayoutState,
   EffortLevel,
@@ -17,6 +17,7 @@ import type {
   AuthError,
   BlockingError,
   ConfigError,
+  CompactionInfo,
   TurnStats,
   LogEvent,
   PermissionRequest,
@@ -451,6 +452,20 @@ async function runQueryLoop(
             } satisfies LogEvent)
           }
         }
+      } else if (msg.type === 'system' && msg.subtype === 'compact_boundary') {
+        const cm = msg as SDKCompactBoundaryMessage
+        const info: CompactionInfo = {
+          turnNum: session.turnNum,
+          trigger: cm.compact_metadata.trigger,
+          preTokens: cm.compact_metadata.pre_tokens,
+          postTokens: cm.compact_metadata.post_tokens,
+        }
+        win.webContents.send('session:compaction', info)
+        try {
+          const ctx = await q.getContextUsage()
+          session.usage.ctxPct = Math.round(ctx.percentage)
+          win.webContents.send('session:usage', session.usage)
+        } catch { /* ignore */ }
       } else if (msg.type === 'rate_limit_event') {
         applyRateLimitEvent(session, msg.rate_limit_info)
         win.webContents.send('session:usage', session.usage)
@@ -822,6 +837,40 @@ ipcMain.handle('config:reloadSettings', async (event): Promise<void> => {
   }
 })
 
+// ── Application menu ────────────────────────────────────────────────────────
+// Sets up the macOS application menu with New Window in the Window submenu.
+// role:'windowMenu' causes Electron to call [NSApp setWindowsMenu:] so macOS
+// automatically appends the open-window list and Cmd+` cycling.
+
+function buildAppMenu(): void {
+  const isMac = process.platform === 'darwin'
+  const template: Electron.MenuItemConstructorOptions[] = [
+    ...(isMac ? [{ role: 'appMenu' as const }] : [{ role: 'fileMenu' as const }]),
+    { role: 'editMenu' as const },
+    { role: 'windowMenu' as const },
+  ]
+
+  const menu = Menu.buildFromTemplate(template)
+
+  const windowItem = menu.items.find(item => item.role === 'windowMenu' || item.label === 'Window')
+  if (windowItem?.submenu) {
+    // role:'windowMenu' omits Close (Cmd+W) on macOS — it lives in fileMenu.
+    // Without a registered accelerator, Chromium swallows Cmd+W when the editor
+    // has focus. Insert both items so the accelerator is owned by Electron's
+    // menu system and takes priority over the web content.
+    windowItem.submenu.insert(0, new MenuItem({ type: 'separator' }))
+    windowItem.submenu.insert(0, new MenuItem({ role: 'close' }))
+    windowItem.submenu.insert(0, new MenuItem({ type: 'separator' }))
+    windowItem.submenu.insert(0, new MenuItem({
+      label: 'New Window',
+      accelerator: 'CmdOrCtrl+N',
+      click: () => { void createWindow() },
+    }))
+  }
+
+  Menu.setApplicationMenu(menu)
+}
+
 // ── Window factory ──────────────────────────────────────────────────────────
 
 async function createWindow(): Promise<void> {
@@ -857,8 +906,15 @@ async function createWindow(): Promise<void> {
     lastSentText: null,
   })
 
+  win.on('close', () => {
+    const session = sessions.get(sessionId)
+    if (session?.activeQuery && session.activeQueryObj) {
+      void session.activeQueryObj.interrupt()
+    }
+    session?.promptChannel?.close()
+  })
+
   win.on('closed', () => {
-    sessions.get(sessionId)?.promptChannel?.close()
     sessions.delete(sessionId)
   })
 
@@ -876,6 +932,7 @@ async function createWindow(): Promise<void> {
 // ── App lifecycle ───────────────────────────────────────────────────────────
 
 void app.whenReady().then(() => {
+  buildAppMenu()
   void createWindow()
 
   app.on('activate', () => {
