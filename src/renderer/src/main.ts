@@ -396,7 +396,11 @@ function handleSlashCommand(text: string, view: EditorView): boolean {
 
   if (cmd === '/clear') {
     view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: '' } })
-    void window.api.session.clear()
+    void window.api.session.clear().then(() => {
+      responseView.addSystemMessage(
+        'Session cleared. Previous session still on disk — open it via **Cmd+O**.'
+      )
+    })
     return true
   }
 
@@ -514,7 +518,7 @@ function showHelpOverlay(): void {
   cmdSection.innerHTML = `
     <div class="help-section-title">App slash commands</div>
     <table class="help-table">
-      <tr><td><code>/clear</code></td><td>New session (preserves cwd)</td></tr>
+      <tr><td><code>/clear</code></td><td>New session — prior session stays on disk (Cmd+O)</td></tr>
       <tr><td><code>/help</code></td><td>Show this overlay</td></tr>
       <tr><td><code>/effort [level]</code></td><td>Set effort (before first prompt)</td></tr>
     </table>

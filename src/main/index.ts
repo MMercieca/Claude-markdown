@@ -607,7 +607,9 @@ ipcMain.handle('session:clear', async (event): Promise<void> => {
   // Close the prompt channel so the running query loop exits
   session.promptChannel?.close()
 
-  // Reset runtime state; preserve window-level config (cwd, model, effort, authMode)
+  // Reset runtime state; preserve window-level config (cwd, model, effort, authMode).
+  // claudeSessionId is nulled so the next query starts a fresh session rather than
+  // resuming the cleared one. The old JSONL stays on disk and is reachable via Cmd+O.
   session.activeQuery = false
   session.promptChannel = null
   session.activeQueryObj = null
@@ -616,6 +618,14 @@ ipcMain.handle('session:clear', async (event): Promise<void> => {
   session.pendingPermissions = new Map()
   session.deniedToolIds = new Set()
   session.lastSentText = null
+  session.claudeSessionId = null
+
+  const entry = windowAppStates.get(session.windowId)
+  if (entry) {
+    entry.sessionId = null
+    entry.lastActiveAt = new Date().toISOString()
+    syncAndSave()
+  }
 
   win.webContents.send('session:cleared')
 })
