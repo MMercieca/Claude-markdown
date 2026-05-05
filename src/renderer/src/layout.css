@@ -272,6 +272,19 @@ html, body {
   padding: 8px 0;
 }
 
+.rl-stream-line {
+  font-size: 11px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  padding: 1px 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rl-stream-tool  { opacity: 0.85; }
+.rl-stream-result { opacity: 0.50; }
+.rl-stream-text  { opacity: 0.30; font-style: italic; }
+
 .rl-raw-log {
   flex: 1;
   overflow-y: auto;

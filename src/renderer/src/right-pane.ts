@@ -155,6 +155,74 @@ export function mountRightPane(
   // Restore saved global preference (async; 'stream' is the in-memory default)
   void window.api.state.getRightPaneView().then(saved => applyMode(saved, false))
 
+  // ── Stream view ──────────────────────────────────────────────────────────────
+  // Live ticker: one line per tool_call, result appended inline, dimmer assistant text.
+
+  const streamToolLines = new Map<string, HTMLElement>()  // toolId → stream line
+  let streamAutoScroll = true
+
+  streamEl.addEventListener('scroll', () => {
+    const { scrollTop, scrollHeight, clientHeight } = streamEl
+    streamAutoScroll = scrollHeight - scrollTop - clientHeight < 20
+  })
+
+  function scrollStreamIfNeeded(): void {
+    if (streamAutoScroll) streamEl.scrollTop = streamEl.scrollHeight
+  }
+
+  function formatStreamArg(inputJson: string | undefined): string {
+    if (!inputJson) return ''
+    try {
+      const input = JSON.parse(inputJson) as Record<string, unknown>
+      const path = input['path'] ?? input['file_path'] ?? input['filename']
+      if (typeof path === 'string') return path.split('/').pop() ?? path
+      const cmd = input['command']
+      if (typeof cmd === 'string') return cmd.length > 40 ? cmd.slice(0, 40) + '…' : cmd
+      const pattern = input['pattern'] ?? input['glob']
+      if (typeof pattern === 'string') return pattern
+    } catch { /* fall through */ }
+    return ''
+  }
+
+  function appendStreamToolLine(ev: LogEvent): void {
+    const line = document.createElement('div')
+    line.className = 'rl-stream-line rl-stream-tool'
+    if (ev.toolId) line.dataset.toolId = ev.toolId
+    const arg = formatStreamArg(ev.inputJson)
+    line.textContent = `● ${ev.toolName ?? '(tool)'}${arg ? ' ' + arg : ''}`
+    if (ev.toolId) streamToolLines.set(ev.toolId, line)
+    streamEl.append(line)
+    scrollStreamIfNeeded()
+  }
+
+  function appendStreamResult(ev: LogEvent): void {
+    const line = document.createElement('div')
+    line.className = 'rl-stream-line rl-stream-result'
+    let summary: string
+    if (ev.isDenied) {
+      summary = 'denied'
+    } else {
+      const raw = (ev.outputText ?? '').split('\n')[0]!.slice(0, 60).trim()
+      summary = raw || (ev.isError ? 'error' : 'done')
+    }
+    line.textContent = `  ⎿ ${summary}`
+    const toolLine = ev.toolId ? streamToolLines.get(ev.toolId) : undefined
+    if (toolLine) {
+      toolLine.insertAdjacentElement('afterend', line)
+    } else {
+      streamEl.append(line)
+    }
+    scrollStreamIfNeeded()
+  }
+
+  function appendStreamTextLine(ev: LogEvent): void {
+    const line = document.createElement('div')
+    line.className = 'rl-stream-line rl-stream-text'
+    line.textContent = `${(ev.textLength ?? 0).toLocaleString()} chars`
+    streamEl.append(line)
+    scrollStreamIfNeeded()
+  }
+
   // ── Event log ──────────────────────────────────────────────────────────────
   // Maps toolId → the card element so we can attach the result.
 
@@ -283,10 +351,18 @@ export function mountRightPane(
 
   window.api.session.onLogEvent((ev) => {
     rawEvents.push(ev)
-    if (viewMode === 'raw') {
-      appendRawBlock(ev)
+    if (viewMode === 'raw') appendRawBlock(ev)
+
+    // Stream view (always updated, regardless of active view mode)
+    if (ev.kind === 'tool_call') {
+      appendStreamToolLine(ev)
+    } else if (ev.kind === 'tool_result') {
+      appendStreamResult(ev)
+    } else if (ev.kind === 'assistant_text') {
+      appendStreamTextLine(ev)
     }
 
+    // Cards view
     if (ev.kind === 'turn_start') {
       appendTurnSep(ev.turnNum ?? 0)
     } else if (ev.kind === 'tool_call') {
@@ -512,8 +588,11 @@ export function mountRightPane(
     clear(): void {
       logEl.innerHTML = ''
       rawEl.innerHTML = ''
+      streamEl.innerHTML = ''
       rawEvents.length = 0
       toolCards.clear()
+      streamToolLines.clear()
+      streamAutoScroll = true
       lastStats = null
       forkStaged = false
       pendingPermissionToolId = null
