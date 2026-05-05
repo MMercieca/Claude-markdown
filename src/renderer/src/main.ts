@@ -387,6 +387,9 @@ document.addEventListener('keydown', (e: KeyboardEvent) => {
 })
 
 // ── Slash command interceptor ───────────────────────────────────────────────
+// Commands that spawn the claude CLI as a one-shot subprocess (Option C).
+// Grows as the user finds gaps; initial entry is /insights.
+const CLI_SLASH_ALLOWLIST = new Set(['insights'])
 
 function handleSlashCommand(text: string, view: EditorView): boolean {
   const cmd = text.split(/\s+/)[0]!.toLowerCase()
@@ -409,7 +412,35 @@ function handleSlashCommand(text: string, view: EditorView): boolean {
     return true
   }
 
+  const cmdName = cmd.startsWith('/') ? cmd.slice(1) : cmd
+  if (CLI_SLASH_ALLOWLIST.has(cmdName)) {
+    view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: '' } })
+    void runCliSlash(text)
+    return true
+  }
+
   return false
+}
+
+async function runCliSlash(cmd: string): Promise<void> {
+  setEditorEditable(false)
+  rightPane.setActive(`${cmd}…`)
+  responseView.setShellLoading(true)
+  responseView.addSystemMessage(`_Running \`${cmd}\`…_`)
+  try {
+    const result = await window.api.session.shellSlash(cmd)
+    if (result.error) {
+      responseView.addSystemMessage(`**Error:** ${result.error}`)
+    } else if (result.output) {
+      responseView.addSystemMessage(result.output)
+    } else {
+      responseView.addSystemMessage('_(no output)_')
+    }
+  } finally {
+    responseView.setShellLoading(false)
+    setEditorEditable(true)
+    rightPane.setIdle()
+  }
 }
 
 function handleEffortCommand(text: string): void {

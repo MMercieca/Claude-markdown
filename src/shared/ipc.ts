@@ -48,6 +48,7 @@ export interface RendererToMain {
   'session:clear'(): void
   'session:setModel'(model: string): string | null  // null = success, string = error message
   'session:permissionResponse'(toolId: string, choice: PermissionChoice): void
+  'session:shellSlash'(cmd: string): { output: string; error?: string }
   'config:get'(): ConfigBootstrap
   'config:pickCwd'(): string | null
   'config:setModel'(model: string): void

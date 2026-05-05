@@ -267,6 +267,7 @@ interface ActiveTurnState {
 interface Props {
   turns: Turn[]
   activeTurn: ActiveTurnState | null
+  shellLoading: boolean
   authError: AuthError | null
   onDismissAuthError: () => void
   blockingError: BlockingError | null
@@ -276,12 +277,12 @@ interface Props {
   onDismissConfigError: () => void
 }
 
-function Transcript({ turns, activeTurn, authError, onDismissAuthError, blockingError, onDismissBlockingError, onRetry, configError, onDismissConfigError }: Props): React.JSX.Element {
+function Transcript({ turns, activeTurn, shellLoading, authError, onDismissAuthError, blockingError, onDismissBlockingError, onRetry, configError, onDismissConfigError }: Props): React.JSX.Element {
   const endRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: 'end' })
-  }, [turns, activeTurn])
+  }, [turns, activeTurn, shellLoading])
 
   const showSpinner =
     activeTurn !== null &&
@@ -353,6 +354,13 @@ function Transcript({ turns, activeTurn, authError, onDismissAuthError, blocking
           )}
         </div>
       )}
+      {shellLoading && !activeTurn && (
+        <div className="activity-spinner" aria-label="Working">
+          <span className="dot" />
+          <span className="dot" />
+          <span className="dot" />
+        </div>
+      )}
       <div ref={endRef} />
     </>
   )
@@ -371,6 +379,7 @@ export class ResponseView {
   private authError: AuthError | null = null
   private blockingError: BlockingError | null = null
   private configError: ConfigError | null = null
+  private shellLoading = false
 
   constructor(container: HTMLElement) {
     this.root = createRoot(container)
@@ -385,6 +394,7 @@ export class ResponseView {
       <Transcript
         turns={this.turns}
         activeTurn={activeTurnState}
+        shellLoading={this.shellLoading}
         authError={this.authError}
         onDismissAuthError={() => { this.authError = null; this.render() }}
         blockingError={this.blockingError}
@@ -472,6 +482,11 @@ export class ResponseView {
 
   finishAssistantTurn(): void { this.freezeActiveTurn(false) }
   markInterrupted(): void    { this.freezeActiveTurn(true) }
+
+  setShellLoading(loading: boolean): void {
+    this.shellLoading = loading
+    this.render()
+  }
 
   addSystemMessage(markdown: string): void {
     this.turns.push({ role: 'system', markdown })

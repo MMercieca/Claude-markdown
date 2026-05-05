@@ -134,6 +134,9 @@ const api = {
     permissionResponse: (toolId: string, choice: PermissionChoice): Promise<void> =>
       ipcRenderer.invoke('session:permissionResponse', toolId, choice) as Promise<void>,
 
+    shellSlash: (cmd: string): Promise<{ output: string; error?: string }> =>
+      ipcRenderer.invoke('session:shellSlash', cmd) as Promise<{ output: string; error?: string }>,
+
     onStatusLine: (cb: (text: string) => void): (() => void) => {
       const listener = (_e: Electron.IpcRendererEvent, text: string) => cb(text)
       ipcRenderer.on('session:statusLine', listener)

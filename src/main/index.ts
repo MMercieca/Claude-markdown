@@ -1,6 +1,6 @@
 import { app, BrowserWindow, ipcMain, nativeTheme, dialog, shell, Menu, MenuItem } from 'electron'
 import { readFile, writeFile, mkdir } from 'node:fs/promises'
-import { exec } from 'node:child_process'
+import { exec, spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { homedir } from 'node:os'
@@ -852,6 +852,38 @@ ipcMain.handle('config:reloadSettings', async (event): Promise<void> => {
       cachedSettingsParseError ? ({ message: cachedSettingsParseError } satisfies ConfigError) : null
     )
   }
+})
+
+// ── CLI slash-command shell-out ─────────────────────────────────────────────
+// Handles CLI-only slash commands (e.g. /insights) that the SDK cannot dispatch
+// headlessly. Spawns `claude --print <cmd>`, buffers stdout, returns the result.
+// Binary resolved from PATH; ENOENT produces a clear error message.
+
+ipcMain.handle('session:shellSlash', async (_event, cmd: string): Promise<{ output: string; error?: string }> => {
+  return new Promise((resolve) => {
+    const child = spawn('claude', ['--print', cmd], {
+      env: process.env,
+    })
+    let stdout = ''
+    let stderr = ''
+    child.stdout.on('data', (chunk: Buffer) => { stdout += chunk.toString() })
+    child.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString() })
+    child.on('close', (code) => {
+      const out = stdout.trim()
+      if (code === 0 || out) {
+        resolve({ output: out })
+      } else {
+        resolve({ output: '', error: stderr.trim() || `claude exited with code ${String(code)}` })
+      }
+    })
+    child.on('error', (err) => {
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+        resolve({ output: '', error: 'claude CLI not found on PATH. Make sure it is installed and your PATH includes it.' })
+      } else {
+        resolve({ output: '', error: err.message })
+      }
+    })
+  })
 })
 
 // ── Status-line shell-out ───────────────────────────────────────────────────
