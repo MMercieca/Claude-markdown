@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
-import type { LayoutState, ConfigBootstrap, EffortLevel, AuthMode, UsageState, AuthInfo, SignInStatus, AuthError, BlockingError, ConfigError, CompactionInfo, TurnStats, LogEvent, PermissionRequest, PermissionChoice, SerializedImage, HistoricalTurn } from '../shared/ipc'
+import type { LayoutState, ConfigBootstrap, EffortLevel, AuthMode, UsageState, AuthInfo, SignInStatus, AuthError, BlockingError, ConfigError, CompactionInfo, TurnStats, LogEvent, PermissionRequest, PermissionChoice, SerializedImage, HistoricalTurn, SessionSummary } from '../shared/ipc'
 
 // Ergonomic nested API exposed to the renderer. Each method wraps
 // ipcRenderer.invoke so the renderer never sees ipcRenderer directly.
@@ -140,6 +140,12 @@ const api = {
     getHistory: (): Promise<HistoricalTurn[]> =>
       ipcRenderer.invoke('session:getHistory') as Promise<HistoricalTurn[]>,
 
+    listSessions: (): Promise<SessionSummary[]> =>
+      ipcRenderer.invoke('session:listSessions') as Promise<SessionSummary[]>,
+
+    resumeSession: (sessionId: string): Promise<void> =>
+      ipcRenderer.invoke('session:resumeSession', sessionId) as Promise<void>,
+
     onStatusLine: (cb: (text: string) => void): (() => void) => {
       const listener = (_e: Electron.IpcRendererEvent, text: string) => cb(text)
       ipcRenderer.on('session:statusLine', listener)
@@ -164,4 +170,4 @@ const api = {
 contextBridge.exposeInMainWorld('api', api)
 
 export type Api = typeof api
-export type { LayoutState, ConfigBootstrap, EffortLevel, AuthMode, UsageState, AuthInfo, SignInStatus, AuthError, BlockingError, ConfigError, CompactionInfo, TurnStats, LogEvent, PermissionRequest, PermissionChoice, SerializedImage, HistoricalTurn }
+export type { LayoutState, ConfigBootstrap, EffortLevel, AuthMode, UsageState, AuthInfo, SignInStatus, AuthError, BlockingError, ConfigError, CompactionInfo, TurnStats, LogEvent, PermissionRequest, PermissionChoice, SerializedImage, HistoricalTurn, SessionSummary }

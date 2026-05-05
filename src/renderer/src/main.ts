@@ -584,6 +584,167 @@ function formatChipLabel(toolName: string, inputJson: string): string {
   return toolName
 }
 
+// ── Session picker (Cmd+O) ──────────────────────────────────────────────────
+
+function relativeTime(ms: number): string {
+  const diff = Date.now() - ms
+  if (diff < 60_000) return 'just now'
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`
+  return `${Math.floor(diff / 86_400_000)}d ago`
+}
+
+async function activateSessionPick(sessionId: string, overlay: HTMLElement): Promise<void> {
+  overlay.remove()
+
+  if (agentActive) {
+    const ok = window.confirm('Interrupt current session and resume the selected one?')
+    if (!ok) return
+    responseView.markInterrupted()
+    rightPane.setIdle()
+    agentActive = false
+  }
+
+  await window.api.session.resumeSession(sessionId)
+  // session:cleared fires before this promise resolves, wiping the panes
+
+  const history = await window.api.session.getHistory()
+  for (const turn of history) {
+    if (turn.role === 'user') responseView.addUserTurn(turn.text)
+    else responseView.addCompletedAssistantTurn(turn.text)
+  }
+}
+
+async function showSessionPickerOverlay(): Promise<void> {
+  if (document.getElementById('session-picker-overlay')) return
+
+  const overlay = document.createElement('div')
+  overlay.id = 'session-picker-overlay'
+  overlay.className = 'session-picker-overlay'
+
+  const modal = document.createElement('div')
+  modal.className = 'session-picker-modal'
+
+  const title = document.createElement('div')
+  title.className = 'session-picker-title'
+  title.textContent = 'Open Session'
+
+  const list = document.createElement('div')
+  list.className = 'session-picker-list'
+  list.textContent = 'Loading…'
+
+  const footer = document.createElement('div')
+  footer.className = 'session-picker-footer'
+
+  const closeBtn = document.createElement('button')
+  closeBtn.type = 'button'
+  closeBtn.className = 'session-picker-close-btn'
+  closeBtn.textContent = 'Close  (Esc)'
+  closeBtn.addEventListener('click', () => overlay.remove())
+
+  footer.append(closeBtn)
+  modal.append(title, list, footer)
+  overlay.append(modal)
+  document.body.append(overlay)
+
+  overlay.addEventListener('click', (e: MouseEvent) => {
+    if (e.target === overlay) overlay.remove()
+  })
+
+  const sessionList = await window.api.session.listSessions()
+  list.textContent = ''
+
+  if (sessionList.length === 0) {
+    const empty = document.createElement('div')
+    empty.className = 'session-picker-empty'
+    empty.textContent = 'No sessions found for the current directory.'
+    list.append(empty)
+    closeBtn.focus()
+    return
+  }
+
+  let selectedIndex = 0
+  const rows: HTMLButtonElement[] = []
+
+  const updateSelection = (): void => {
+    rows.forEach((row, i) => row.classList.toggle('selected', i === selectedIndex))
+    rows[selectedIndex]?.scrollIntoView({ block: 'nearest' })
+  }
+
+  sessionList.forEach((sess, i) => {
+    const row = document.createElement('button')
+    row.type = 'button'
+    row.className = 'session-picker-row'
+    if (sess.isCurrentSession) row.classList.add('current-session')
+
+    const idEl = document.createElement('span')
+    idEl.className = 'session-picker-id'
+    idEl.textContent = sess.sessionId.slice(0, 8)
+
+    const summaryEl = document.createElement('span')
+    summaryEl.className = 'session-picker-summary'
+    const raw = sess.firstPrompt ?? sess.summary
+    summaryEl.textContent = raw.length > 80 ? raw.slice(0, 80) + '…' : raw
+    summaryEl.title = raw
+
+    const timeEl = document.createElement('span')
+    timeEl.className = 'session-picker-time'
+    timeEl.textContent = relativeTime(sess.lastModified)
+
+    row.append(idEl, summaryEl, timeEl)
+
+    const { sessionId, isCurrentSession } = sess
+    row.addEventListener('click', () => {
+      if (!isCurrentSession) void activateSessionPick(sessionId, overlay)
+    })
+    row.addEventListener('mouseenter', () => {
+      selectedIndex = i
+      updateSelection()
+    })
+
+    rows.push(row)
+    list.append(row)
+  })
+
+  updateSelection()
+
+  const keyHandler = (e: KeyboardEvent): void => {
+    if (!document.contains(overlay)) {
+      document.removeEventListener('keydown', keyHandler)
+      return
+    }
+    if (e.key === 'Escape') {
+      e.stopPropagation()
+      overlay.remove()
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      selectedIndex = Math.min(selectedIndex + 1, sessionList.length - 1)
+      updateSelection()
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      selectedIndex = Math.max(selectedIndex - 1, 0)
+      updateSelection()
+    } else if (e.key === 'Enter') {
+      e.preventDefault()
+      const sel = sessionList[selectedIndex]
+      if (sel && !sel.isCurrentSession) {
+        document.removeEventListener('keydown', keyHandler)
+        void activateSessionPick(sel.sessionId, overlay)
+      }
+    }
+  }
+  document.addEventListener('keydown', keyHandler)
+
+  closeBtn.focus()
+}
+
+document.addEventListener('keydown', (e: KeyboardEvent) => {
+  if ((e.metaKey || e.ctrlKey) && e.key === 'o') {
+    e.preventDefault()
+    void showSessionPickerOverlay()
+  }
+})
+
 // ── Session history hydration ───────────────────────────────────────────────
 // If this window was restored from a prior session, populate the response pane
 // with the prior turns before the user sends anything.

@@ -4,7 +4,7 @@ import { exec, spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { homedir } from 'node:os'
-import { query, getSessionMessages } from '@anthropic-ai/claude-agent-sdk'
+import { query, getSessionMessages, listSessions } from '@anthropic-ai/claude-agent-sdk'
 import type { SDKUserMessage, SDKRateLimitInfo, Query, SDKAssistantMessage, SDKCompactBoundaryMessage, CanUseTool } from '@anthropic-ai/claude-agent-sdk'
 import type {
   LayoutState,
@@ -25,6 +25,7 @@ import type {
   PermissionChoice,
   SerializedImage,
   HistoricalTurn,
+  SessionSummary,
 } from '../shared/ipc'
 
 type ContentBlock =
@@ -982,6 +983,61 @@ ipcMain.handle('session:getHistory', async (event): Promise<HistoricalTurn[]> =>
     console.warn('[history] getSessionMessages failed:', err)
     return []
   }
+})
+
+// ── Session list and resume ──────────────────────────────────────────────────
+
+ipcMain.handle('session:listSessions', async (event): Promise<SessionSummary[]> => {
+  const session = sessions.get(event.sender.id)
+  if (!session) return []
+
+  try {
+    const list = await listSessions({ dir: session.cwd })
+    return list.map(s => ({
+      sessionId: s.sessionId,
+      summary: s.customTitle ?? s.summary,
+      firstPrompt: s.firstPrompt,
+      lastModified: s.lastModified,
+      isCurrentSession: s.sessionId === session.claudeSessionId,
+    }))
+  } catch (err) {
+    console.warn('[sessions] listSessions failed:', err)
+    return []
+  }
+})
+
+ipcMain.handle('session:resumeSession', async (event, sessionId: string): Promise<void> => {
+  const winId = event.sender.id
+  const session = sessions.get(winId)
+  if (!session) return
+  const win = BrowserWindow.fromWebContents(event.sender)
+  if (!win) return
+
+  if (session.activeQuery && session.activeQueryObj) {
+    await session.activeQueryObj.interrupt()
+  }
+
+  for (const [, resolver] of session.pendingPermissions) resolver('deny')
+  session.promptChannel?.close()
+
+  session.activeQuery = false
+  session.promptChannel = null
+  session.activeQueryObj = null
+  session.turnNum = 0
+  session.usage = {}
+  session.pendingPermissions = new Map()
+  session.deniedToolIds = new Set()
+  session.lastSentText = null
+  session.claudeSessionId = sessionId
+
+  const entry = windowAppStates.get(session.windowId)
+  if (entry) {
+    entry.sessionId = sessionId
+    entry.lastActiveAt = new Date().toISOString()
+    syncAndSave()
+  }
+
+  win.webContents.send('session:cleared')
 })
 
 // ── CLI slash-command shell-out ─────────────────────────────────────────────

@@ -42,6 +42,14 @@ export interface HistoricalTurn {
   text: string
 }
 
+export interface SessionSummary {
+  sessionId: string
+  summary: string       // customTitle ?? SDK summary
+  firstPrompt?: string  // first user prompt preview
+  lastModified: number  // ms timestamp
+  isCurrentSession: boolean
+}
+
 export interface RendererToMain {
   ping(): 'pong'
   'layout:load'(): LayoutState | null
@@ -56,6 +64,8 @@ export interface RendererToMain {
   'session:permissionResponse'(toolId: string, choice: PermissionChoice): void
   'session:shellSlash'(cmd: string): { output: string; error?: string }
   'session:getHistory'(): HistoricalTurn[]
+  'session:listSessions'(): SessionSummary[]
+  'session:resumeSession'(sessionId: string): void
   'config:get'(): ConfigBootstrap
   'config:pickCwd'(): string | null
   'config:setModel'(model: string): void
