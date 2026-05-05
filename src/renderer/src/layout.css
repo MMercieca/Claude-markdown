@@ -285,6 +285,15 @@ html, body {
 .rl-stream-result { opacity: 0.50; }
 .rl-stream-text  { opacity: 0.30; font-style: italic; }
 
+@keyframes rl-stream-flash {
+  0%   { background: rgba(0, 120, 255, 0.22); opacity: 1; border-radius: 3px; }
+  100% { background: transparent; }
+}
+
+.rl-stream-highlight {
+  animation: rl-stream-flash 0.9s ease-out forwards;
+}
+
 .rl-raw-log {
   flex: 1;
   overflow-y: auto;

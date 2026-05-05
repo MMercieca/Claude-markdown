@@ -40,18 +40,9 @@ export type ToolChip = {
 
 function ToolChipEl({ chip }: { chip: ToolChip }): React.JSX.Element {
   const onClick = (): void => {
-    const card = document.querySelector<HTMLElement>(`[data-tool-id="${chip.toolId}"]`)
-    if (!card) return
-    card.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
-    const body = card.querySelector<HTMLElement>('.rl-card-body')
-    const btn = card.querySelector<HTMLButtonElement>('.rl-expand-btn')
-    if (body?.hidden) {
-      body.hidden = false
-      if (btn) {
-        btn.textContent = '▼'
-        btn.setAttribute('aria-expanded', 'true')
-      }
-    }
+    document.dispatchEvent(
+      new CustomEvent('tool-chip-click', { detail: { toolId: chip.toolId } })
+    )
   }
 
   const statusIcon = chip.status === 'pending' ? '…' : chip.status === 'ok' ? '✓' : '✗'

@@ -228,6 +228,38 @@ export function mountRightPane(
 
   const toolCards = new Map<string, HTMLElement>()
 
+  // ── Tool chip → right-pane navigation ──────────────────────────────────────
+  // Dispatched by ToolChipEl in response.tsx; handled here based on current viewMode.
+
+  document.addEventListener('tool-chip-click', (e) => {
+    const { toolId } = (e as CustomEvent<{ toolId: string }>).detail
+
+    if (viewMode === 'stream') {
+      const line = streamToolLines.get(toolId)
+      if (!line) return
+      line.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+      line.classList.remove('rl-stream-highlight')
+      // Force reflow so re-adding the class re-triggers the animation
+      void line.offsetWidth
+      line.classList.add('rl-stream-highlight')
+      setTimeout(() => line.classList.remove('rl-stream-highlight'), 900)
+    } else if (viewMode === 'cards') {
+      const card = toolCards.get(toolId)
+      if (!card) return
+      card.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+      const body = card.querySelector<HTMLElement>('.rl-card-body')
+      const btn = card.querySelector<HTMLButtonElement>('.rl-expand-btn')
+      if (body?.hidden) {
+        body.hidden = false
+        if (btn) {
+          btn.textContent = '▼'
+          btn.setAttribute('aria-expanded', 'true')
+        }
+      }
+    }
+    // Raw JSON mode: no action
+  })
+
   function appendTurnSep(turnNum: number): void {
     const sep = document.createElement('div')
     sep.className = 'rl-turn-sep'
