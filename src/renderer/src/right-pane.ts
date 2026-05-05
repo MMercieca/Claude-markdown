@@ -78,30 +78,49 @@ export function mountRightPane(
 
   renderIdle()
 
-  // ── View toggle (Structured / Raw JSON) ────────────────────────────────────
+  // ── View toggle (Stream / Cards / Raw JSON) ───────────────────────────────
 
-  let viewMode: 'structured' | 'raw' = 'structured'
+  type ViewMode = 'stream' | 'cards' | 'raw'
+  let viewMode: ViewMode = 'stream'
   const rawEvents: LogEvent[] = []
 
+  // Stream pane — empty placeholder; populated by step 62
+  const streamEl = document.createElement('div')
+  streamEl.className = 'rl-stream-log'
+  streamEl.hidden = false
+
+  // Cards (structured event log) — hidden until 'cards' mode is selected
+  logEl.hidden = true
+
+  // Raw JSON pane
+  const rawEl = document.createElement('div')
+  rawEl.className = 'rl-raw-log'
+  rawEl.hidden = true
+
+  // Toggle bar
   const toggleBar = document.createElement('div')
   toggleBar.className = 'rl-toggle-bar'
 
-  const structuredBtn = document.createElement('button')
-  structuredBtn.className = 'rl-toggle-btn rl-toggle-active'
-  structuredBtn.type = 'button'
-  structuredBtn.textContent = 'Structured'
+  const streamBtn = document.createElement('button')
+  streamBtn.className = 'rl-toggle-btn rl-toggle-active'
+  streamBtn.type = 'button'
+  streamBtn.textContent = 'Stream'
+
+  const cardsBtn = document.createElement('button')
+  cardsBtn.className = 'rl-toggle-btn'
+  cardsBtn.type = 'button'
+  cardsBtn.textContent = 'Cards'
 
   const rawBtn = document.createElement('button')
   rawBtn.className = 'rl-toggle-btn'
   rawBtn.type = 'button'
   rawBtn.textContent = 'Raw JSON'
 
-  toggleBar.append(structuredBtn, rawBtn)
-  logEl.insertAdjacentElement('beforebegin', toggleBar)
+  toggleBar.append(streamBtn, cardsBtn, rawBtn)
 
-  const rawEl = document.createElement('div')
-  rawEl.className = 'rl-raw-log'
-  rawEl.hidden = true
+  // Insert order: toggleBar → streamEl → logEl (existing) → rawEl
+  logEl.insertAdjacentElement('beforebegin', toggleBar)
+  logEl.insertAdjacentElement('beforebegin', streamEl)
   logEl.insertAdjacentElement('afterend', rawEl)
 
   function appendRawBlock(ev: LogEvent): void {
@@ -117,24 +136,24 @@ export function mountRightPane(
     for (const ev of rawEvents) appendRawBlock(ev)
   }
 
-  structuredBtn.addEventListener('click', () => {
-    if (viewMode === 'structured') return
-    viewMode = 'structured'
-    structuredBtn.classList.add('rl-toggle-active')
-    rawBtn.classList.remove('rl-toggle-active')
-    logEl.hidden = false
-    rawEl.hidden = true
-  })
+  function applyMode(mode: ViewMode, save = true): void {
+    viewMode = mode
+    streamBtn.classList.toggle('rl-toggle-active', mode === 'stream')
+    cardsBtn.classList.toggle('rl-toggle-active', mode === 'cards')
+    rawBtn.classList.toggle('rl-toggle-active', mode === 'raw')
+    streamEl.hidden = mode !== 'stream'
+    logEl.hidden = mode !== 'cards'
+    rawEl.hidden = mode !== 'raw'
+    if (mode === 'raw') rebuildRawView()
+    if (save) void window.api.state.setRightPaneView(mode)
+  }
 
-  rawBtn.addEventListener('click', () => {
-    if (viewMode === 'raw') return
-    viewMode = 'raw'
-    rawBtn.classList.add('rl-toggle-active')
-    structuredBtn.classList.remove('rl-toggle-active')
-    rebuildRawView()
-    logEl.hidden = true
-    rawEl.hidden = false
-  })
+  streamBtn.addEventListener('click', () => applyMode('stream'))
+  cardsBtn.addEventListener('click', () => applyMode('cards'))
+  rawBtn.addEventListener('click', () => applyMode('raw'))
+
+  // Restore saved global preference (async; 'stream' is the in-memory default)
+  void window.api.state.getRightPaneView().then(saved => applyMode(saved, false))
 
   // ── Event log ──────────────────────────────────────────────────────────────
   // Maps toolId → the card element so we can attach the result.
@@ -499,13 +518,7 @@ export function mountRightPane(
       forkStaged = false
       pendingPermissionToolId = null
       pendingHasSuggestions = false
-      if (viewMode === 'raw') {
-        viewMode = 'structured'
-        structuredBtn.classList.add('rl-toggle-active')
-        rawBtn.classList.remove('rl-toggle-active')
-        logEl.hidden = false
-        rawEl.hidden = true
-      }
+      // View mode is a global preference and intentionally persists across clears
       renderIdle()
     },
   }

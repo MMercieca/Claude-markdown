@@ -67,6 +67,8 @@ export interface RendererToMain {
   'session:listSessions'(): SessionSummary[]
   'session:resumeSession'(sessionId: string): void
   'session:setForkNext'(): void
+  'state:getRightPaneView'(): 'stream' | 'cards' | 'raw'
+  'state:setRightPaneView'(view: 'stream' | 'cards' | 'raw'): void
   'config:get'(): ConfigBootstrap
   'config:pickCwd'(): string | null
   'config:setModel'(model: string): void

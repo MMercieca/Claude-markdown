@@ -824,6 +824,7 @@ interface AppStateWindow {
 interface AppState {
   windows: AppStateWindow[]
   layoutVersion: number
+  rightPaneView?: 'stream' | 'cards' | 'raw'  // global UI preference, not per-window
 }
 
 const DEFAULT_APP_STATE: AppState = { windows: [], layoutVersion: 1 }
@@ -891,6 +892,17 @@ ipcMain.handle('layout:load', async (): Promise<LayoutState | null> => {
 ipcMain.handle('layout:save', async (_event, state: LayoutState): Promise<void> => {
   await mkdir(layoutDir, { recursive: true })
   await writeFile(layoutPath, JSON.stringify(state), 'utf-8')
+})
+
+// ── Global UI state IPC handlers ────────────────────────────────────────────
+
+ipcMain.handle('state:getRightPaneView', (): 'stream' | 'cards' | 'raw' => {
+  return appState.rightPaneView ?? 'stream'
+})
+
+ipcMain.handle('state:setRightPaneView', (_event, view: 'stream' | 'cards' | 'raw'): void => {
+  appState.rightPaneView = view
+  saveState()
 })
 
 // ── Config IPC handlers ─────────────────────────────────────────────────────

@@ -162,6 +162,13 @@ const api = {
     },
   },
 
+  state: {
+    getRightPaneView: (): Promise<'stream' | 'cards' | 'raw'> =>
+      ipcRenderer.invoke('state:getRightPaneView') as Promise<'stream' | 'cards' | 'raw'>,
+    setRightPaneView: (view: 'stream' | 'cards' | 'raw'): Promise<void> =>
+      ipcRenderer.invoke('state:setRightPaneView', view) as Promise<void>,
+  },
+
   system: {
     openUrl: (url: string): Promise<void> =>
       ipcRenderer.invoke('system:openUrl', url) as Promise<void>,
