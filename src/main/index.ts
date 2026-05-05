@@ -370,6 +370,7 @@ async function runQueryLoop(
       effort: session.effort,
       settingSources: ['user', 'project', 'local'],
       canUseTool: makeCanUseTool(session, win, settingsAllowlist),
+      resume: session.claudeSessionId ?? undefined,
       onElicitation: async (request) => {
         if (request.mode === 'url' && request.url) {
           await shell.openExternal(request.url)
@@ -1021,7 +1022,7 @@ function buildAppMenu(): void {
 
 // ── Window factory ──────────────────────────────────────────────────────────
 
-async function createWindow(): Promise<void> {
+async function createWindow(opts?: { cwd?: string; resumeSessionId?: string }): Promise<void> {
   const userSettings = await getUserSettings()
   const win = new BrowserWindow({
     width: 1200,
@@ -1038,7 +1039,8 @@ async function createWindow(): Promise<void> {
   })
 
   const sessionId = win.webContents.id
-  const windowCwd = defaultCwd()
+  const windowCwd = opts?.cwd ?? defaultCwd()
+  const initialClaudeSessionId = opts?.resumeSessionId ?? null
   sessions.set(sessionId, {
     windowId: sessionId,
     activeQuery: false,
@@ -1053,12 +1055,12 @@ async function createWindow(): Promise<void> {
     pendingPermissions: new Map(),
     deniedToolIds: new Set(),
     lastSentText: null,
-    claudeSessionId: null,
+    claudeSessionId: initialClaudeSessionId,
   })
 
   windowAppStates.set(sessionId, {
     cwd: windowCwd,
-    sessionId: null,
+    sessionId: initialClaudeSessionId,
     lastActiveAt: new Date().toISOString(),
     title: null,
   })
@@ -1096,7 +1098,14 @@ void app.whenReady().then(async () => {
   const settings = await getUserSettings()
   if (settings.statusLine) startStatusLinePolling(settings.statusLine)
   await loadState()
-  void createWindow()
+  const savedWindows = appState.windows
+  if (savedWindows.length > 0) {
+    for (const w of savedWindows) {
+      void createWindow({ cwd: w.cwd, resumeSessionId: w.sessionId ?? undefined })
+    }
+  } else {
+    void createWindow()
+  }
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) void createWindow()
