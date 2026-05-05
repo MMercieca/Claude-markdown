@@ -99,6 +99,7 @@ interface SessionState {
   deniedToolIds: Set<string>  // tools the user denied; used to suppress error styling
   lastSentText: string | null  // saved for retry after a blocking error
   claudeSessionId: string | null    // SDK session ID; null until first turn init message
+  forkNextSession: boolean          // when true, next query forks rather than continues
 }
 
 const sessions = new Map<number, SessionState>()
@@ -363,6 +364,8 @@ async function runQueryLoop(
     win.webContents.send('session:configError', { message: cachedSettingsParseError } satisfies ConfigError)
   }
   const settingsAllowlist = new Set(userSettings.allowedTools)
+  const doFork = session.forkNextSession
+  session.forkNextSession = false  // consume; only applies to this one query
   const q = query({
     prompt: channel,
     options: {
@@ -373,6 +376,7 @@ async function runQueryLoop(
       settingSources: ['user', 'project', 'local'],
       canUseTool: makeCanUseTool(session, win, settingsAllowlist),
       resume: session.claudeSessionId ?? undefined,
+      forkSession: doFork || undefined,
       onElicitation: async (request) => {
         if (request.mode === 'url' && request.url) {
           await shell.openExternal(request.url)
@@ -619,6 +623,7 @@ ipcMain.handle('session:clear', async (event): Promise<void> => {
   session.deniedToolIds = new Set()
   session.lastSentText = null
   session.claudeSessionId = null
+  session.forkNextSession = false
 
   const entry = windowAppStates.get(session.windowId)
   if (entry) {
@@ -775,6 +780,7 @@ ipcMain.handle('session:retry', async (event): Promise<void> => {
   session.pendingPermissions = new Map()
   session.deniedToolIds = new Set()
   session.lastSentText = null
+  session.forkNextSession = false
 
   win.webContents.send('session:cleared')
 
@@ -1039,6 +1045,7 @@ ipcMain.handle('session:resumeSession', async (event, sessionId: string): Promis
   session.deniedToolIds = new Set()
   session.lastSentText = null
   session.claudeSessionId = sessionId
+  session.forkNextSession = false
 
   const entry = windowAppStates.get(session.windowId)
   if (entry) {
@@ -1048,6 +1055,11 @@ ipcMain.handle('session:resumeSession', async (event, sessionId: string): Promis
   }
 
   win.webContents.send('session:cleared')
+})
+
+ipcMain.handle('session:setForkNext', (event): void => {
+  const session = sessions.get(event.sender.id)
+  if (session) session.forkNextSession = true
 })
 
 // ── CLI slash-command shell-out ─────────────────────────────────────────────
@@ -1169,6 +1181,7 @@ async function createWindow(opts?: { cwd?: string; resumeSessionId?: string }): 
     deniedToolIds: new Set(),
     lastSentText: null,
     claudeSessionId: initialClaudeSessionId,
+    forkNextSession: false,
   })
 
   windowAppStates.set(sessionId, {

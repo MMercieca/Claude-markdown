@@ -66,6 +66,7 @@ export interface RendererToMain {
   'session:getHistory'(): HistoricalTurn[]
   'session:listSessions'(): SessionSummary[]
   'session:resumeSession'(sessionId: string): void
+  'session:setForkNext'(): void
   'config:get'(): ConfigBootstrap
   'config:pickCwd'(): string | null
   'config:setModel'(model: string): void

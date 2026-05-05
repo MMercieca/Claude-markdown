@@ -103,6 +103,26 @@ html, body {
   font-style: italic;
 }
 
+.rh-fork-btn {
+  flex-shrink: 0;
+  margin-left: auto;
+  background: transparent;
+  border: 1px solid var(--divider);
+  border-radius: 4px;
+  padding: 2px 8px;
+  font: inherit;
+  font-size: 11px;
+  color: inherit;
+  cursor: pointer;
+}
+
+.rh-fork-btn:hover { background: var(--divider); }
+
+.rh-fork-btn.rh-fork-staged {
+  opacity: 0.5;
+  cursor: default;
+}
+
 /* ── Right-pane event log ── */
 
 #right-log {

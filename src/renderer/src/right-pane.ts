@@ -14,6 +14,7 @@ export function mountRightPane(
   onInterrupt: () => void,
 ): RightPaneHandle {
   let lastStats: TurnStats | null = null
+  let forkStaged = false
 
   // ── Header ────────────────────────────────────────────────────────────────
 
@@ -56,7 +57,19 @@ export function mountRightPane(
       `<span class="rh-model">${escapeHtml(model)}</span>`,
     ].join('<span class="rh-sep">·</span>')
 
-    headerEl.append(stats)
+    const forkBtn = document.createElement('button')
+    forkBtn.type = 'button'
+    forkBtn.className = forkStaged ? 'rh-fork-btn rh-fork-staged' : 'rh-fork-btn'
+    forkBtn.textContent = forkStaged ? 'Fork staged ✓' : 'Fork from here'
+    forkBtn.disabled = forkStaged
+    forkBtn.addEventListener('click', () => {
+      void window.api.session.setForkNext().then(() => {
+        forkStaged = true
+        renderIdle()
+      })
+    })
+
+    headerEl.append(stats, forkBtn)
   }
 
   window.api.session.onTurnStats((stats) => {
@@ -418,7 +431,7 @@ export function mountRightPane(
   })
 
   return {
-    setActive(activity?: string): void { renderActive(activity) },
+    setActive(activity?: string): void { forkStaged = false; renderActive(activity) },
     setIdle(): void { renderIdle() },
     showModelList(models: ModelOption[], currentModel: string): void {
       const card = document.createElement('div')
@@ -483,6 +496,7 @@ export function mountRightPane(
       rawEvents.length = 0
       toolCards.clear()
       lastStats = null
+      forkStaged = false
       pendingPermissionToolId = null
       pendingHasSuggestions = false
       if (viewMode === 'raw') {

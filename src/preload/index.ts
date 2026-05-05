@@ -146,6 +146,9 @@ const api = {
     resumeSession: (sessionId: string): Promise<void> =>
       ipcRenderer.invoke('session:resumeSession', sessionId) as Promise<void>,
 
+    setForkNext: (): Promise<void> =>
+      ipcRenderer.invoke('session:setForkNext') as Promise<void>,
+
     onStatusLine: (cb: (text: string) => void): (() => void) => {
       const listener = (_e: Electron.IpcRendererEvent, text: string) => cb(text)
       ipcRenderer.on('session:statusLine', listener)
