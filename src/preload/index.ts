@@ -139,6 +139,12 @@ const api = {
       ipcRenderer.on('session:statusLine', listener)
       return () => ipcRenderer.removeListener('session:statusLine', listener)
     },
+
+    onSlashCommands: (cb: (cmds: string[]) => void): (() => void) => {
+      const listener = (_e: Electron.IpcRendererEvent, cmds: string[]) => cb(cmds)
+      ipcRenderer.on('session:slashCommands', listener)
+      return () => ipcRenderer.removeListener('session:slashCommands', listener)
+    },
   },
 
   system: {

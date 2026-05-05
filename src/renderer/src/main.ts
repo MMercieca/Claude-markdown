@@ -153,6 +153,7 @@ const editableCompartment = new Compartment()
 // Tracks whether the agent is currently generating.
 let agentActive = false
 let insightsTurnCount = 0
+let sessionSlashCommands: string[] = []
 
 const rightPane = mountRightPane(rightHeader, rightLog, () => {
   responseView.markInterrupted()
@@ -363,12 +364,15 @@ window.api.session.onCleared(() => {
   rightPane.clear()
   void statusBarReady.then((sb) => sb.unfreeze())
   insightsTurnCount = 0
+  sessionSlashCommands = []
   agentActive = false
   pastedImages.clear()
   imageCounter = 0
   setEditorEditable(true)
   editor.focus()
 })
+
+window.api.session.onSlashCommands((cmds) => { sessionSlashCommands = cmds })
 
 // Escape is handled at the document level because the editor is non-editable
 // while the agent is active and won't dispatch keymaps in that state.
@@ -485,9 +489,20 @@ function showHelpOverlay(): void {
     </table>
   `
 
-  const note = document.createElement('p')
-  note.className = 'help-note'
-  note.textContent = 'All other slash commands (/compact, /insights, /model, skill commands, etc.) pass through to Claude directly.'
+  const backendSection = document.createElement('div')
+  backendSection.className = 'help-section'
+  if (sessionSlashCommands.length > 0) {
+    const sorted = [...sessionSlashCommands].sort()
+    backendSection.innerHTML = `
+      <div class="help-section-title">Session slash commands</div>
+      <div class="help-slash-list">${sorted.map((c) => `<code>/${c}</code>`).join('')}</div>
+    `
+  } else {
+    backendSection.innerHTML = `
+      <div class="help-section-title">Session slash commands</div>
+      <p class="help-note" style="margin:0">Available after the first prompt is sent.</p>
+    `
+  }
 
   const closeBtn = document.createElement('button')
   closeBtn.className = 'help-close-btn'
@@ -495,7 +510,7 @@ function showHelpOverlay(): void {
   closeBtn.textContent = 'Close  (Esc)'
   closeBtn.addEventListener('click', () => overlay.remove())
 
-  modal.append(title, kbSection, cmdSection, note, closeBtn)
+  modal.append(title, kbSection, cmdSection, backendSection, closeBtn)
   overlay.append(modal)
   document.body.append(overlay)
 

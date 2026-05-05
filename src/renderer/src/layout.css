@@ -1080,6 +1080,20 @@ html, body {
   margin: 0;
 }
 
+.help-slash-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding-top: 4px;
+}
+
+.help-slash-list code {
+  font-size: 11px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--divider);
+}
+
 .help-close-btn {
   align-self: flex-end;
   background: transparent;

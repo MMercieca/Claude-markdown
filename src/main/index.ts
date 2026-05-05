@@ -463,6 +463,12 @@ async function runQueryLoop(
             } satisfies LogEvent)
           }
         }
+      } else if (msg.type === 'system' && msg.subtype === 'init') {
+        const initMsg = msg as { slash_commands?: unknown }
+        if (Array.isArray(initMsg.slash_commands)) {
+          const cmds = (initMsg.slash_commands as unknown[]).filter((c): c is string => typeof c === 'string')
+          win.webContents.send('session:slashCommands', cmds)
+        }
       } else if (msg.type === 'system' && msg.subtype === 'compact_boundary') {
         const cm = msg as SDKCompactBoundaryMessage
         const info: CompactionInfo = {

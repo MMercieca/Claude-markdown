@@ -165,6 +165,7 @@ export interface MainToRenderer {
   'session:permissionRequest': PermissionRequest  // tool permission required; agent paused
   'session:cleared': void               // session was reset via /clear; renderer should wipe state
   'session:statusLine': string          // output from statusLine shell command; empty = clear
+  'session:slashCommands': string[]     // slash commands available in this session (from init message)
 }
 
 export interface RendererToSystem {
