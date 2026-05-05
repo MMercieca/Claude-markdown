@@ -776,6 +776,64 @@ ipcMain.handle('ping', (): 'pong' => 'pong')
 
 const layoutDir = join(homedir(), '.claude-markdown')
 const layoutPath = join(layoutDir, 'layout.json')
+const statePath = join(layoutDir, 'state.json')
+
+// ── App state schema ────────────────────────────────────────────────────────
+
+interface AppStateWindow {
+  cwd: string
+  sessionId: string | null
+  lastActiveAt: string
+  title: string | null
+}
+
+interface AppState {
+  windows: AppStateWindow[]
+  layoutVersion: number
+}
+
+const DEFAULT_APP_STATE: AppState = { windows: [], layoutVersion: 1 }
+let appState: AppState = { ...DEFAULT_APP_STATE }
+let stateSaveTimer: ReturnType<typeof setTimeout> | null = null
+
+async function loadState(): Promise<AppState> {
+  try {
+    const raw = await readFile(statePath, 'utf-8')
+    const parsed: unknown = JSON.parse(raw)
+    if (
+      parsed !== null &&
+      typeof parsed === 'object' &&
+      'windows' in parsed &&
+      Array.isArray((parsed as Record<string, unknown>)['windows'])
+    ) {
+      appState = parsed as AppState
+      return appState
+    }
+    console.warn('[state] state.json has unexpected shape; using default')
+  } catch (err) {
+    const code = (err as { code?: string }).code
+    if (code !== 'ENOENT') {
+      console.warn('[state] Could not read state.json; using default:', err)
+    }
+  }
+  appState = { ...DEFAULT_APP_STATE, windows: [] }
+  return appState
+}
+
+function saveState(): void {
+  if (stateSaveTimer !== null) clearTimeout(stateSaveTimer)
+  stateSaveTimer = setTimeout(() => {
+    stateSaveTimer = null
+    void (async () => {
+      try {
+        await mkdir(layoutDir, { recursive: true })
+        await writeFile(statePath, JSON.stringify(appState, null, 2), 'utf-8')
+      } catch (err) {
+        console.warn('[state] Could not save state.json:', err)
+      }
+    })()
+  }, 500)
+}
 
 ipcMain.handle('layout:load', async (): Promise<LayoutState | null> => {
   try {
@@ -1001,6 +1059,7 @@ void app.whenReady().then(async () => {
   buildAppMenu()
   const settings = await getUserSettings()
   if (settings.statusLine) startStatusLinePolling(settings.statusLine)
+  await loadState()
   void createWindow()
 
   app.on('activate', () => {
