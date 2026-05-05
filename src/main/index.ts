@@ -96,6 +96,7 @@ interface SessionState {
   pendingPermissions: Map<string, (choice: PermissionChoice) => void>  // toolUseID → resolver
   deniedToolIds: Set<string>  // tools the user denied; used to suppress error styling
   lastSentText: string | null  // saved for retry after a blocking error
+  claudeSessionId: string | null    // SDK session ID; null until first turn init message
 }
 
 const sessions = new Map<number, SessionState>()
@@ -464,7 +465,16 @@ async function runQueryLoop(
           }
         }
       } else if (msg.type === 'system' && msg.subtype === 'init') {
-        const initMsg = msg as { slash_commands?: unknown }
+        const initMsg = msg as { slash_commands?: unknown; session_id?: string }
+        if (typeof initMsg.session_id === 'string') {
+          session.claudeSessionId = initMsg.session_id
+          const entry = windowAppStates.get(session.windowId)
+          if (entry) {
+            entry.sessionId = initMsg.session_id
+            entry.lastActiveAt = new Date().toISOString()
+            syncAndSave()
+          }
+        }
         if (Array.isArray(initMsg.slash_commands)) {
           const cmds = (initMsg.slash_commands as unknown[]).filter((c): c is string => typeof c === 'string')
           win.webContents.send('session:slashCommands', cmds)
@@ -509,6 +519,11 @@ async function runQueryLoop(
           model: session.model,
         }
         win.webContents.send('session:turnStats', turnStats)
+        const winEntry = windowAppStates.get(session.windowId)
+        if (winEntry) {
+          winEntry.lastActiveAt = new Date().toISOString()
+          syncAndSave()
+        }
         if (session.activeQuery) {
           session.activeQuery = false
           win.webContents.send('session:done')
@@ -835,6 +850,15 @@ function saveState(): void {
   }, 500)
 }
 
+// In-memory per-window persistent state, keyed by Electron webContents.id.
+// On save, the values are written as the `windows` array in state.json.
+const windowAppStates = new Map<number, AppStateWindow>()
+
+function syncAndSave(): void {
+  appState.windows = Array.from(windowAppStates.values())
+  saveState()
+}
+
 ipcMain.handle('layout:load', async (): Promise<LayoutState | null> => {
   try {
     const raw = await readFile(layoutPath, 'utf-8')
@@ -1014,12 +1038,13 @@ async function createWindow(): Promise<void> {
   })
 
   const sessionId = win.webContents.id
+  const windowCwd = defaultCwd()
   sessions.set(sessionId, {
     windowId: sessionId,
     activeQuery: false,
     promptChannel: null,
     activeQueryObj: null,
-    cwd: defaultCwd(),
+    cwd: windowCwd,
     model: userSettings.model,
     effort: userSettings.effort,
     authMode: defaultAuthMode(),
@@ -1028,7 +1053,16 @@ async function createWindow(): Promise<void> {
     pendingPermissions: new Map(),
     deniedToolIds: new Set(),
     lastSentText: null,
+    claudeSessionId: null,
   })
+
+  windowAppStates.set(sessionId, {
+    cwd: windowCwd,
+    sessionId: null,
+    lastActiveAt: new Date().toISOString(),
+    title: null,
+  })
+  syncAndSave()
 
   win.on('close', () => {
     const session = sessions.get(sessionId)
@@ -1040,6 +1074,8 @@ async function createWindow(): Promise<void> {
 
   win.on('closed', () => {
     sessions.delete(sessionId)
+    windowAppStates.delete(sessionId)
+    syncAndSave()
   })
 
   win.on('ready-to-show', () => {
