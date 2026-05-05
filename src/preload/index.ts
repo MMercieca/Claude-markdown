@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
-import type { LayoutState, ConfigBootstrap, EffortLevel, AuthMode, UsageState, AuthInfo, SignInStatus, AuthError, BlockingError, ConfigError, CompactionInfo, TurnStats, LogEvent, PermissionRequest, PermissionChoice, SerializedImage } from '../shared/ipc'
+import type { LayoutState, ConfigBootstrap, EffortLevel, AuthMode, UsageState, AuthInfo, SignInStatus, AuthError, BlockingError, ConfigError, CompactionInfo, TurnStats, LogEvent, PermissionRequest, PermissionChoice, SerializedImage, HistoricalTurn } from '../shared/ipc'
 
 // Ergonomic nested API exposed to the renderer. Each method wraps
 // ipcRenderer.invoke so the renderer never sees ipcRenderer directly.
@@ -137,6 +137,9 @@ const api = {
     shellSlash: (cmd: string): Promise<{ output: string; error?: string }> =>
       ipcRenderer.invoke('session:shellSlash', cmd) as Promise<{ output: string; error?: string }>,
 
+    getHistory: (): Promise<HistoricalTurn[]> =>
+      ipcRenderer.invoke('session:getHistory') as Promise<HistoricalTurn[]>,
+
     onStatusLine: (cb: (text: string) => void): (() => void) => {
       const listener = (_e: Electron.IpcRendererEvent, text: string) => cb(text)
       ipcRenderer.on('session:statusLine', listener)
@@ -161,4 +164,4 @@ const api = {
 contextBridge.exposeInMainWorld('api', api)
 
 export type Api = typeof api
-export type { LayoutState, ConfigBootstrap, EffortLevel, AuthMode, UsageState, AuthInfo, SignInStatus, AuthError, BlockingError, ConfigError, CompactionInfo, TurnStats, LogEvent, PermissionRequest, PermissionChoice, SerializedImage }
+export type { LayoutState, ConfigBootstrap, EffortLevel, AuthMode, UsageState, AuthInfo, SignInStatus, AuthError, BlockingError, ConfigError, CompactionInfo, TurnStats, LogEvent, PermissionRequest, PermissionChoice, SerializedImage, HistoricalTurn }

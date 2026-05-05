@@ -437,6 +437,11 @@ export class ResponseView {
     this.render()
   }
 
+  addCompletedAssistantTurn(text: string): void {
+    this.turns.push({ role: 'assistant', segments: [{ kind: 'text', content: text }] })
+    this.render()
+  }
+
   startAssistantTurn(): void {
     this.activeTurn = { segments: [], currentText: '', chipMap: new Map() }
     this.render()

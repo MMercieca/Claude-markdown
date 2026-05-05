@@ -34,6 +34,12 @@ export interface ConfigBootstrap extends SessionConfig {
   effortLevels: EffortLevel[]
   authMode: AuthMode
   bedrockAvailable: boolean
+  resumedSessionId?: string  // set when the window was restored from a prior session
+}
+
+export interface HistoricalTurn {
+  role: 'user' | 'assistant'
+  text: string
 }
 
 export interface RendererToMain {
@@ -49,6 +55,7 @@ export interface RendererToMain {
   'session:setModel'(model: string): string | null  // null = success, string = error message
   'session:permissionResponse'(toolId: string, choice: PermissionChoice): void
   'session:shellSlash'(cmd: string): { output: string; error?: string }
+  'session:getHistory'(): HistoricalTurn[]
   'config:get'(): ConfigBootstrap
   'config:pickCwd'(): string | null
   'config:setModel'(model: string): void

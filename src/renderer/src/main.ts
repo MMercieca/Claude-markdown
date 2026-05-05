@@ -583,3 +583,20 @@ function formatChipLabel(toolName: string, inputJson: string): string {
   } catch { /* fall through */ }
   return toolName
 }
+
+// ── Session history hydration ───────────────────────────────────────────────
+// If this window was restored from a prior session, populate the response pane
+// with the prior turns before the user sends anything.
+
+void (async () => {
+  const config = await window.api.config.get()
+  if (!config?.resumedSessionId) return
+  const history = await window.api.session.getHistory()
+  for (const turn of history) {
+    if (turn.role === 'user') {
+      responseView.addUserTurn(turn.text)
+    } else {
+      responseView.addCompletedAssistantTurn(turn.text)
+    }
+  }
+})()

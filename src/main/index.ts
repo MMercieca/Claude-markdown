@@ -4,7 +4,7 @@ import { exec, spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { homedir } from 'node:os'
-import { query } from '@anthropic-ai/claude-agent-sdk'
+import { query, getSessionMessages } from '@anthropic-ai/claude-agent-sdk'
 import type { SDKUserMessage, SDKRateLimitInfo, Query, SDKAssistantMessage, SDKCompactBoundaryMessage, CanUseTool } from '@anthropic-ai/claude-agent-sdk'
 import type {
   LayoutState,
@@ -24,6 +24,7 @@ import type {
   PermissionRequest,
   PermissionChoice,
   SerializedImage,
+  HistoricalTurn,
 } from '../shared/ipc'
 
 type ContentBlock =
@@ -888,6 +889,7 @@ ipcMain.handle('config:get', (event): ConfigBootstrap | null => {
     effortLevels: EFFORT_LEVELS,
     authMode: session.authMode,
     bedrockAvailable: bedrockAvailable(),
+    resumedSessionId: session.claudeSessionId ?? undefined,
   }
 })
 
@@ -934,6 +936,51 @@ ipcMain.handle('config:reloadSettings', async (event): Promise<void> => {
     win.webContents.send('session:configError',
       cachedSettingsParseError ? ({ message: cachedSettingsParseError } satisfies ConfigError) : null
     )
+  }
+})
+
+// ── Session history hydration ──────────────────────────────────────────────
+// Called by the renderer once on mount when the window was restored from a
+// prior session. Returns prior user/assistant text turns in conversation order.
+
+ipcMain.handle('session:getHistory', async (event): Promise<HistoricalTurn[]> => {
+  const session = sessions.get(event.sender.id)
+  if (!session?.claudeSessionId) return []
+
+  try {
+    const messages = await getSessionMessages(session.claudeSessionId, { dir: session.cwd })
+    const turns: HistoricalTurn[] = []
+
+    for (const msg of messages) {
+      if (msg.type !== 'user' && msg.type !== 'assistant') continue
+      const raw = msg.message as { role: string; content: unknown }
+      const content = raw.content
+
+      // Skip user messages whose content is entirely tool_result blocks — those
+      // are SDK-internal feedback, not user-visible prompts.
+      if (msg.type === 'user' && Array.isArray(content)) {
+        const blocks = content as Array<{ type: string }>
+        if (blocks.length > 0 && blocks.every(b => b.type === 'tool_result')) continue
+      }
+
+      let text = ''
+      if (typeof content === 'string') {
+        text = content
+      } else if (Array.isArray(content)) {
+        text = (content as Array<{ type: string; text?: string }>)
+          .filter(b => b.type === 'text' && typeof b.text === 'string')
+          .map(b => b.text!)
+          .join('\n\n')
+      }
+
+      if (!text.trim()) continue
+      turns.push({ role: msg.type as 'user' | 'assistant', text })
+    }
+
+    return turns
+  } catch (err) {
+    console.warn('[history] getSessionMessages failed:', err)
+    return []
   }
 })
 
